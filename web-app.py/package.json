@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "lightweight-charts": "^4.2.2",
+    "plotly": "^1.0.6"
+  }
+}

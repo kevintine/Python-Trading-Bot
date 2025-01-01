@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MoneyMaker</title>
+    <link rel="stylesheet" href="{{url_for("static", filename="styles.css")}}" />
+    <script src="static/scripts.js"></script>
+</head>
+<body>
+    <h1>Candlestick Charting Identifiers</h1>
+    <p>Select a candlestick pattern and a stock to see where those patterns arise in the chart.</p>
+
+    <div class="candlestick">
+        <form class="candlestick-form" action="/handle_form" method="GET">
+            <select class="pattern-select" name="pattern">
+                {% for pattern in patterns %}
+                    <option value="{{pattern}}">{{ patterns[pattern] }}</option>
+                {% endfor %}
+            </select>
+            <select class="pattern-select" name="stock">
+                {% for stock in stocks %}
+                    <option value="{{stock}}">{{ stocks[stock] }}</option>
+                {% endfor %}
+            </select>
+            <input type="submit" value="scan" />
+        </form>
+
+        {% if chart_path %}
+            <h2>Detected Candlestick Chart</h2>
+            <img src="{{ chart_path }}" alt="Candlestick Chart">
+        {% endif %}
+        {% if candlestick_chart_path %}
+            <h2>Detected Pattern Chart</h2>
+            <img src="{{ candlestick_chart_path }}" alt="Candlestick With Pattern Chart">
+        {% endif %}
+
+        <div class="image-gallery">
+            <div class="trend">
+                <h2>7 Day Trend</h2>
+                <img src="{{ sevenDays }}" alt="7 Day Trend">
+            </div>
+            <div class="trend">
+                <h2>14 Day Trend</h2>
+                <img src="{{ fourteenDays }}" alt="7 Day Trend">
+            </div>
+            <div class="trend">
+                <h2>30 Day Trend</h2>
+                <img src="{{ oneMonth }}" alt="7 Day Trend">
+            </div>
+            <div class="trend">
+                <h2>365 Day Trend</h2>
+                <img src="{{ oneYear }}" alt="7 Day Trend">
+            </div>
+        </div>
+    </div>
+</body>
+</html>
