@@ -1,4 +1,5 @@
 import talib
+import pandas as pd
 import yfinance as yf
 import mplfinance as mpf
 from datetime import datetime, timedelta
@@ -23,14 +24,6 @@ def get_past_date_by_day(numOfDays):
     date_one_year_ago = one_year_ago.strftime("%Y-%m-%d")
     return date_one_year_ago
 
-
-# Sample code to how to use talib candlestick patterns
-# data = yf.download("SPY", start="2020-01-01", end="2020-08-01")
-# engulfing = talib.CDLENGULFING(data['Open'], data['High'], data['Low'], data['Close'])
-# morning_star = talib.CDLMORNINGSTAR(data['Open'], data['High'], data['Low'], data['Close'])
-# data['Morning Star'] = morning_star
-# data['Englufing'] = engulfing
-
 # This takes a string of a stock symbol and returns the data for that stock from 2022-01-01 till today's date
 def get_stock_with_symbol(symbol):
     data = yf.download(symbol, start=date_one_year_ago, end=current_date)
@@ -41,6 +34,16 @@ def get_candlestick_pattern_from_stock(symbol, pattern):
     pattern_function = getattr(talib, pattern)
     result = pattern_function(data['Open'], data['High'], data['Low'], data['Close'])
     return result
+
+
+# Sample code to how to use talib candlestick patterns
+# data = yf.download("SPY", start="2020-01-01", end="2020-08-01")
+# engulfing = talib.CDLENGULFING(data['Open'], data['High'], data['Low'], data['Close'])
+# morning_star = talib.CDLMORNINGSTAR(data['Open'], data['High'], data['Low'], data['Close'])
+# data['Morning Star'] = morning_star
+# data['Engulfing'] = engulfing
+# pd.set_option('display.max_rows', None)
+# print(engulfing)
 
 
 

@@ -2,12 +2,9 @@ import yfinance as yf
 
 patterns = {
     "CDLDOJI": "Doji",
-    "CDLDOJISTAR": "Doji Star",
-    "CDLDRAGONFLYDOJI": "Dragonfly Doji",
     "CDLENGULFING": "Engulfing Pattern",
     "CDLHAMMER": "Hammer",
     "CDLINVERTEDHAMMER": "Inverted Hammer",
-    "CDLMORNINGDOJISTAR": "Morning Doji Star",
     "CDLMORNINGSTAR": "Morning Star"
 }
 
@@ -20,6 +17,30 @@ stocks = {
     "CM.TO": "Canadian Imperial Bank of Commerce",
     "AW.TO": "A & W Food Services of Canada Inc.",
 }
+
+pattern_descriptions = {
+    "CDLDOJI": {
+        "description": "A Doji is a candlestick pattern where the open and close prices are nearly equal, indicating market indecision. It often signals a potential reversal or continuation, depending on the context of the trend.",
+        "image_path": "static/images/cdl_doji.jpg"
+    },
+    "CDLENGULFING": {
+        "description": "The Engulfing pattern consists of a smaller candlestick followed by a larger one that completely engulfs it. A bullish engulfing pattern suggests a potential upward reversal, while a bearish engulfing indicates possible downside.",
+        "image_path": "static/images/cdl_engulfing.jpg"
+    },
+    "CDLHAMMER": {
+        "description": "The Hammer is a single candlestick with a small body and a long lower wick, appearing after a downtrend. It signals potential bullish reversal as buyers step in at lower levels.",
+        "image_path": "static/images/cdl_hammer.jpg"
+    },
+    "CDLINVERTEDHAMMER": {
+        "description": "The Inverted Hammer is similar to the Hammer but has a long upper wick and appears after a downtrend. It indicates a potential bullish reversal but requires confirmation.",
+        "image_path": "static/images/cdl_inverted_hammer.jpg"
+    },
+    "CDLMORNINGSTAR": {
+        "description": "The Morning Star is a three-candlestick pattern that forms after a downtrend. It consists of a large bearish candle, a smaller indecisive candle, and a bullish candle, signaling a reversal to the upside.",
+        "image_path": "static/images/cdl_morning_star.jpg"
+    }
+}
+
 
 # patterns = {
 #     "CDL2CROWS": "Two Crows",

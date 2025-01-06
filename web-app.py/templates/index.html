@@ -3,56 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MoneyMaker</title>
-    <link rel="stylesheet" href="{{url_for("static", filename="styles.css")}}" />
+    <title>Candlestick Pattern Visualizer</title>
+    <link rel="stylesheet" href="{{url_for('static', filename='styles.css')}}" />
     <script src="static/scripts.js"></script>
 </head>
 <body>
-    <h1>Candlestick Charting Identifiers</h1>
-    <p>Select a candlestick pattern and a stock to see where those patterns arise in the chart.</p>
+    <h1 style="text-align: center; color: white;">Pattern Detection Candlestick Chart</h1>
 
+    <!-- Full-width section explaining the webpage -->
+    <div style="width: 100%; max-height: 100px; background-color: #f0f0f0; padding: 20px; box-sizing: border-box;">
+        <p style="margin: 0; text-align: center; font-size: 1.2em;">
+            Welcome to my Candlestick Pattern Visualizer! This webpage use a Python library called TALIB to analyze stock market data using candlestick patterns. It allows you to explore interactive candlestick charts for the stocks
+            I'm currently following. Select a candlestick pattern and a stock to see how it looks in the chart.
+        </p>
+    </div>
+
+    <!-- Display Pattern Info -->
+    {% if pattern_image_path %}
+    <div class="pattern-info" style="display: flex; flex-direction: row; align-items: center; gap: 0; padding-top: 20px;">
+        <div class="pattern-image" style="flex: 1; text-align: center; min-height: 200px; background-color: white; display: flex; justify-content: center; align-items: center; padding: 15px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);">
+            <img src="{{ pattern_image_path['image_path'] }}" alt="Pattern Image" style="max-width: 100%; max-height: 200px; display: block; margin: 0 auto;">
+        </div>
+        <div class="pattern-description" style="flex: 1; background-color: white; padding: 15px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); text-align: center; display: flex; justify-content: center; align-items: center; min-height: 200px;">
+            <p style="margin: 0;">{{ pattern_image_path['description'] }}</p>
+        </div>
+    </div>
+    {% else %}
+    <p>No pattern selected. Select a pattern to see details.</p>
+    {% endif %}
+
+
+
+    <!-- Candlestick form -->
     <div class="candlestick">
-        <form class="candlestick-form" action="/handle_form" method="GET">
+        <form class="candlestick-form" action="/candlestick-chart" method="GET">
             <select class="pattern-select" name="pattern">
                 {% for pattern in patterns %}
-                    <option value="{{pattern}}">{{ patterns[pattern] }}</option>
+                    <option value="{{ pattern }}">{{ patterns[pattern] }}</option>
                 {% endfor %}
             </select>
             <select class="pattern-select" name="stock">
                 {% for stock in stocks %}
-                    <option value="{{stock}}">{{ stocks[stock] }}</option>
+                    <option value="{{ stock }}">{{ stocks[stock] }}</option>
                 {% endfor %}
             </select>
-            <input type="submit" value="scan" />
+            <input type="submit" value="Scan" />
         </form>
+    </div>
 
-        {% if chart_path %}
-            <h2>Detected Candlestick Chart</h2>
-            <img src="{{ chart_path }}" alt="Candlestick Chart">
-        {% endif %}
+    <!-- Display the candlestick chart -->
+    <div style="margin-top: 20px;">
         {% if candlestick_chart_path %}
-            <h2>Detected Pattern Chart</h2>
-            <img src="{{ candlestick_chart_path }}" alt="Candlestick With Pattern Chart">
+            <iframe src="{{ candlestick_chart_path }}" width="100%" height="600px" frameborder="0"></iframe>
+        {% else %}
+            <p>No chart to display. Select a stock and generate a chart.</p>
         {% endif %}
-
-        <div class="image-gallery">
-            <div class="trend">
-                <h2>7 Day Trend</h2>
-                <img src="{{ sevenDays }}" alt="7 Day Trend">
-            </div>
-            <div class="trend">
-                <h2>14 Day Trend</h2>
-                <img src="{{ fourteenDays }}" alt="7 Day Trend">
-            </div>
-            <div class="trend">
-                <h2>30 Day Trend</h2>
-                <img src="{{ oneMonth }}" alt="7 Day Trend">
-            </div>
-            <div class="trend">
-                <h2>365 Day Trend</h2>
-                <img src="{{ oneYear }}" alt="7 Day Trend">
-            </div>
-        </div>
     </div>
 </body>
 </html>
