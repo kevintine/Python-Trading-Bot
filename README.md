@@ -1,12 +1,19 @@
-# MoneyMakerApp
-This web app utilizes backtesting.py and alpaca.py for you to choose stocks and run various strategies and backtests on. 
+# Candlestick Pattern Identifier 
 
-1. Fetch
-2. Strategy
-3. Trade
+This project allows you to visualize stock price movements using candlestick charts. It is able to identify different candlestick patterns within the chart to help visualize and identify different patterns. 
 
-1. Fetch the stock data of the past year
-2. Create a Trade class to store a trade 
-3. Create a Strategy class to determine buy and sell windows
+## Features
+- Display historical stock data in a candlestick format.
+- Adjustable time frames to analyze short-term and long-term trends.
+- Interactive chart with zoom and pan functionality.
+- Integrated with real-time or historical stock data APIs.
+- Identify multiple types of patterns on multiple stocks. 
+
+## Issues Currently
+
+Having issues with TA-Lib and it's .whl file and deploying on a site. 
+
+
+
 
 
