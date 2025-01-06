@@ -126,7 +126,7 @@ SQLAlchemy==2.0.10
 sseclient-py==1.8.0
 starlette==0.17.1
 sympy==1.12.1
-TA-Lib @ file:///C:/Users/kevin/Downloads/TA_Lib-0.4.24-cp310-cp310-win_amd64.whl#sha256=e730d89fcfc3f0832b3495e6fa0e47ab802eb6aa0c65c5fa2a9fd267e18bdef4
+TA-Lib @ file://./TA_Lib-0.4.24-cp310-cp310-win_amd64.whl
 tabulate==0.9.0
 tbb==2021.12.0
 tensorboard==2.12.3
