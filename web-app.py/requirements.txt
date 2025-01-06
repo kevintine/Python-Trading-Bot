@@ -1,2 +1,2 @@
 numpy==2.2.1
-TA-Lib
+TA-Lib==0.4.24
