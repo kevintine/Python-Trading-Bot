@@ -1,2 +1,2 @@
 numpy==2.2.1
-TA-Lib @ file:///C:/Users/kevin/Documents/Python/Python%20Trading%20Bot/TA_Lib-0.4.24-cp310-cp310-win_amd64.whl
+TA-Lib @ file://./TA_Lib-0.4.24-cp310-cp310-win_amd64.whl
