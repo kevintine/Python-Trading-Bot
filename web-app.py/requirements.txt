@@ -74,7 +74,6 @@ msgpack==1.0.3
 multidict==6.0.2
 multitasking==0.0.11
 narwhals==1.19.1
-nba-api==1.1.14
 networkx==3.3
 numpy==1.26.4
 oauthlib==3.2.2
