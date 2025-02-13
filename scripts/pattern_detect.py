@@ -32,12 +32,20 @@ def get_stock_with_symbol(symbol):
 def get_candlestick_pattern_from_stock(symbol, pattern):
     data = yf.download(symbol, start=date_one_year_ago, end=current_date)
     pattern_function = getattr(talib, pattern)
-    result = pattern_function(data['Open'], data['High'], data['Low'], data['Close'])
+    result = pattern_function(
+        data['Open'].squeeze(),
+        data['High'].squeeze(),
+        data['Low'].squeeze(),
+        data['Close'].squeeze()
+    )
+    print(result)
     return result
 
-
+get_candlestick_pattern_from_stock("AC.TO", "CDLHAMMER")
 # Sample code to how to use talib candlestick patterns
 # data = yf.download("SPY", start="2020-01-01", end="2020-08-01")
+# data = data.to_numpy()
+# print(data)
 # engulfing = talib.CDLENGULFING(data['Open'], data['High'], data['Low'], data['Close'])
 # morning_star = talib.CDLMORNINGSTAR(data['Open'], data['High'], data['Low'], data['Close'])
 # data['Morning Star'] = morning_star

@@ -131,68 +131,86 @@ def get_pattern_descriptions(pattern):
     return pattern_descriptions.get(pattern)
 
 
+# Testing to get the supports and resistances
 
 
-# #  Testing for get_chart_with_pattern()
-# symbol_tester = "SPY"
-# pattern_tester = "CDLENGULFING"
+#  Testing for get_chart_with_pattern()
+symbol_tester = "SPY"
+pattern_tester = "CDLENGULFING"
 
-# data = get_candlestick_pattern_from_stock(symbol_tester, pattern_tester)
-# # Convert the NumPy array to a Pandas DataFrame
-# data = data.to_frame(name='Pattern')
-# # Get stcok data
-# stockDataOriginal = yf.Ticker(symbol_tester).history(period='1d', start=date_one_year_ago, end=current_date)
-# # Localize the index
-# stockDataOriginal.index = stockDataOriginal.index.tz_localize(None)
-# # Concatenate the two DataFrames
-# stockData = pd.concat([stockDataOriginal, data], axis=1)
-# # Remove rows where the pattern is 0
-# stockData = stockData[stockData['Pattern'] != 0]
+data = get_candlestick_pattern_from_stock(symbol_tester, pattern_tester)
+# Convert the NumPy array to a Pandas DataFrame
+data = data.to_frame(name='Pattern')
+# Get stcok data
+stockDataOriginal = yf.Ticker(symbol_tester).history(period='1d', start=date_one_year_ago, end=current_date)
+# # Testing to get the supports and resistances
+supports = stockDataOriginal[stockDataOriginal['Low'] == stockDataOriginal['Low'].rolling(5, center=True).min()]['Low']
+resistances = stockDataOriginal[stockDataOriginal['High'] == stockDataOriginal['High'].rolling(5, center=True).max()]['High']
+levels = pd.concat([supports, resistances])
+levels = levels[abs(levels.diff()) > 2]
+print(levels)
+# resistances = stockDataOriginal[stockDataOriginal['High']== stockDataOriginal['High'].rolling(5, center=True).max()]['High']
+# level = pd.concat([supports, resistances])
+# print(level)
+# Localize the index
+stockDataOriginal.index = stockDataOriginal.index.tz_localize(None)
+# Concatenate the two DataFrames
+stockData = pd.concat([stockDataOriginal, data], axis=1)
+# Remove rows where the pattern is 0
+stockData = stockData[stockData['Pattern'] != 0]
 
-# # plot the data
-# fig = make_subplots(
-#     rows=2, cols=1,  
-#     shared_xaxes=True,  
-#     vertical_spacing=0.1,  
-#     row_heights=[0.8, 0.2]  
-# )
-# fig.add_trace(
-#     py.graph_objs.Candlestick(
-#         x=stockDataOriginal.index,
-#         open=stockDataOriginal['Open'],
-#         high=stockDataOriginal['High'],
-#         low=stockDataOriginal['Low'],
-#         close=stockDataOriginal['Close'],
-#         name='Candlestick',
-#     ),
-#     row=1, col=1    
-# )
+# plot the data
+fig = make_subplots(
+    rows=2, cols=1,  
+    shared_xaxes=True,  
+    vertical_spacing=0.1,  
+    row_heights=[0.8, 0.2]  
+)
+fig.add_trace(
+    py.graph_objs.Candlestick(
+        x=stockDataOriginal.index,
+        open=stockDataOriginal['Open'],
+        high=stockDataOriginal['High'],
+        low=stockDataOriginal['Low'],
+        close=stockDataOriginal['Close'],
+        name='Candlestick',
+    ),
+    row=1, col=1    
+)
 
-# fig.add_trace(
-#     py.graph_objs.Candlestick(
-#         x=stockData.index,
-#         open=stockData['Open'],
-#         high=stockData['High'],
-#         low=stockData['Low'],
-#         close=stockData['Close'],
-#         name='Pattern',
-#         increasing=dict(line=dict(color='orange'), fillcolor='orange'),
-#         decreasing=dict(line=dict(color='purple'), fillcolor='purple'),
-#     ),
-#     row=1, col=1    
-# )
+fig.add_trace(
+    py.graph_objs.Candlestick(
+        x=stockData.index,
+        open=stockData['Open'],
+        high=stockData['High'],
+        low=stockData['Low'],
+        close=stockData['Close'],
+        name='Pattern',
+        increasing=dict(line=dict(color='orange'), fillcolor='orange'),
+        decreasing=dict(line=dict(color='purple'), fillcolor='purple'),
+    ),
+    row=1, col=1    
+)
 
-# # Add a volume bar subchart
-# fig.add_trace(
-#     py.graph_objs.Bar(
-#         x=stockDataOriginal.index,
-#         y=stockDataOriginal['Volume'],
-#         name='Volume',
-#         marker_color='blue',
-#     ),
-#     row=2, col=1  
-# )
-# fig.show()
+# Add a volume bar subchart
+fig.add_trace(
+    py.graph_objs.Bar(
+        x=stockDataOriginal.index,
+        y=stockDataOriginal['Volume'],
+        name='Volume',
+        marker_color='blue',
+    ),
+    row=2, col=1  
+)
+
+for index, row in levels.items():
+    fig.add_shape(
+        type="line",
+        x0=index, x1=current_date,  # Extend line to the end
+        y0=row, y1=row,
+        line=dict(color="blue", width=1)
+    )
+fig.show()
 
 # # Test for get_pattern_descriptions()
 # pattern_tester = "CDLENGULFING"
