@@ -6,7 +6,6 @@ import charts
 
 from flask import Flask, render_template, request
 from flask_scss import Scss
-from flask_sqlalchemy import SQLAlchemy
 from static.patterns import patterns, stocks, pattern_descriptions
 from flask import jsonify
 import mplfinance as mpf
