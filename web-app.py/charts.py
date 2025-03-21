@@ -1,19 +1,23 @@
 import os
 import sys
 sys.path.append(os.path.abspath('../scripts'))
-from pattern_detect import get_stock_with_symbol, get_candlestick_pattern_from_stock, get_current_date, get_past_date_by_day
-from static.patterns import pattern_descriptions
 import plotly as py
 from plotly.subplots import make_subplots
 import pandas as pd
 import datetime as dt
 import yfinance as yf
+from pattern_detect import get_stock_with_symbol, get_candlestick_pattern_from_stock, get_current_date, get_past_date_by_day
+from static.patterns import pattern_descriptions
 
-# Date Calculations
+# Keep dates as datetime objects
 current_date = dt.datetime.now()
 one_year_ago = current_date - dt.timedelta(days=365)
-date_one_year_ago = one_year_ago.strftime("%Y-%m-%d")
-current_date = dt.datetime.now().strftime("%Y-%m-%d")
+three_years_ago = current_date - dt.timedelta(days=1095)
+five_years_ago = current_date - dt.timedelta(days=1825)
+
+# Only convert to string if necessary for APIs that require it
+date_one_year_ago_str = one_year_ago.strftime("%Y-%m-%d")
+current_date_str = current_date.strftime("%Y-%m-%d")  # If needed
 
 # FUNCTION: Create a candlestick chart with volume subchart
 def get_chart(symbol):
@@ -61,24 +65,47 @@ def get_chart(symbol):
 # FUNCTION: Create a candlestick chart with volume subchart and pattern detection
 def get_chart_with_pattern(symbol, pattern):
     data = get_candlestick_pattern_from_stock(symbol, pattern)
-    # Convert the NumPy array to a Pandas DataFrame
+    
+    # Convert NumPy array to Pandas DataFrame
     data = data.to_frame(name='Pattern')
-    # Get stcok data
-    stockDataOriginal = yf.Ticker(symbol).history(period='1d', start=date_one_year_ago, end=current_date)
+
+    # Get stock data
+    stockDataOriginal = yf.Ticker(symbol).history(period='1d', start=five_years_ago, end=current_date)
+    
+    # Calculate 50-day SMA and 50-day average volume
+    stockDataOriginal['50_day_SMA'] = stockDataOriginal['Close'].rolling(window=50).mean()
+    stockDataOriginal['50_day_avg_volume'] = stockDataOriginal['Volume'].rolling(window=50).mean()
+
+    # Calculate support and resistance levels
+    supports = stockDataOriginal[stockDataOriginal['Low'] == stockDataOriginal['Low'].rolling(5, center=True).min()]['Low']
+    resistances = stockDataOriginal[stockDataOriginal['High'] == stockDataOriginal['High'].rolling(5, center=True).max()]['High']
+    levels = pd.concat([supports, resistances])
+    levels = levels[abs(levels.diff()) > 1]
+    
     # Localize the index
     stockDataOriginal.index = stockDataOriginal.index.tz_localize(None)
+
     # Concatenate the two DataFrames
     stockData = pd.concat([stockDataOriginal, data], axis=1)
+
     # Remove rows where the pattern is 0
     stockData = stockData[stockData['Pattern'] != 0]
 
-    # plot the data
+    # Identify significant volume spikes (1.3× 50-day avg volume)
+    stockData['Volume_Spike'] = stockData['Volume'] > (1.3 * stockData['50_day_avg_volume'])
+    
+    # Get buy positions
+    
+
+    # Plot the data
     fig = make_subplots(
-        rows=2, cols=1,  
-        shared_xaxes=True,  
-        vertical_spacing=0.1,  
-        row_heights=[0.8, 0.2] 
+        rows=2, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.1,
+        row_heights=[0.8, 0.2]
     )
+
+    # Candlestick chart
     fig.add_trace(
         py.graph_objs.Candlestick(
             x=stockDataOriginal.index,
@@ -88,9 +115,10 @@ def get_chart_with_pattern(symbol, pattern):
             close=stockDataOriginal['Close'],
             name='Candlestick',
         ),
-        row=1, col=1    
+        row=1, col=1
     )
 
+    # Highlight detected patterns with orange/purple candlesticks
     fig.add_trace(
         py.graph_objs.Candlestick(
             x=stockData.index,
@@ -102,10 +130,10 @@ def get_chart_with_pattern(symbol, pattern):
             increasing=dict(line=dict(color='orange'), fillcolor='orange'),
             decreasing=dict(line=dict(color='purple'), fillcolor='purple'),
         ),
-        row=1, col=1    
+        row=1, col=1
     )
 
-    # Add a volume bar subchart
+    # Volume bar subchart
     fig.add_trace(
         py.graph_objs.Bar(
             x=stockDataOriginal.index,
@@ -113,19 +141,52 @@ def get_chart_with_pattern(symbol, pattern):
             name='Volume',
             marker_color='blue',
         ),
-        row=2, col=1  
+        row=2, col=1
     )
 
-    # Update the layout to include a title
+    # 50-day SMA line
+    fig.add_trace(
+        py.graph_objs.Scatter(
+            x=stockDataOriginal.index,
+            y=stockDataOriginal['50_day_SMA'],
+            name='50-day SMA',
+            line=dict(color='green', width=2),
+        ),
+        row=1, col=1
+    )
+
+    # Add support and resistance lines
+    # for index, row in levels.items():
+    #     fig.add_shape(
+    #         type="line",
+    #         x0=index, x1=current_date,  # Extend line to the end
+    #         y0=row, y1=row,
+    #         line=dict(color="blue", width=1)
+    # )
+
+    # # Add vertical lines for volume spikes
+    # for date in spike_dates:
+    #     fig.add_vline(
+    #         x=stockDataOriginal.index,  # ✅ Now a properly formatted string
+    #         line=dict(color="red", width=1.5, dash="dash"),
+    #         annotation_text="Pattern + Volume Spike",
+    #         annotation_position="top left",
+    #     )
+
+    # Update layout
     fig.update_layout(
         title=f"{pattern} for {symbol}",
         title_font=dict(size=20, family="Arial", color="black"),
-        title_x=0.5  # Center the title
+        title_x=0.5
     )
+
+    # Save the file
     file_name = f"{symbol}_candlestick_chart.html"
     file_path = os.path.join('static', file_name)
     fig.write_html(file_path)
-    return file_path    
+
+    return file_path
+
 
 def get_pattern_descriptions(pattern):
     return pattern_descriptions.get(pattern)
@@ -134,83 +195,97 @@ def get_pattern_descriptions(pattern):
 # Testing to get the supports and resistances
 
 
-#  Testing for get_chart_with_pattern()
-symbol_tester = "SPY"
-pattern_tester = "CDLENGULFING"
+# #  Testing for get_chart_with_pattern()
+# import yfinance as yf
+# import pandas as pd
+# import plotly.graph_objects as go
+# from plotly.subplots import make_subplots
 
-data = get_candlestick_pattern_from_stock(symbol_tester, pattern_tester)
-# Convert the NumPy array to a Pandas DataFrame
-data = data.to_frame(name='Pattern')
-# Get stcok data
-stockDataOriginal = yf.Ticker(symbol_tester).history(period='1d', start=date_one_year_ago, end=current_date)
+# # Testing for get_chart_with_pattern()
+# symbol_tester = "INTC"
+# pattern_tester = "CDLENGULFING"
+
+# # Get stock data
+# current_date = pd.Timestamp.today().date()
+# date_one_year_ago = current_date - pd.DateOffset(years=1)
+# stockDataOriginal = yf.Ticker(symbol_tester).history(period='1d', start=date_one_year_ago, end=current_date)
+
+# # Calculate 50-day SMA
+# stockDataOriginal['50_day_SMA'] = stockDataOriginal['Close'].rolling(window=50).mean()
+
 # # Testing to get the supports and resistances
-supports = stockDataOriginal[stockDataOriginal['Low'] == stockDataOriginal['Low'].rolling(5, center=True).min()]['Low']
-resistances = stockDataOriginal[stockDataOriginal['High'] == stockDataOriginal['High'].rolling(5, center=True).max()]['High']
-levels = pd.concat([supports, resistances])
-levels = levels[abs(levels.diff()) > 2]
-print(levels)
-# resistances = stockDataOriginal[stockDataOriginal['High']== stockDataOriginal['High'].rolling(5, center=True).max()]['High']
-# level = pd.concat([supports, resistances])
-# print(level)
-# Localize the index
-stockDataOriginal.index = stockDataOriginal.index.tz_localize(None)
-# Concatenate the two DataFrames
-stockData = pd.concat([stockDataOriginal, data], axis=1)
-# Remove rows where the pattern is 0
-stockData = stockData[stockData['Pattern'] != 0]
+# supports = stockDataOriginal[stockDataOriginal['Low'] == stockDataOriginal['Low'].rolling(5, center=True).min()]['Low']
+# resistances = stockDataOriginal[stockDataOriginal['High'] == stockDataOriginal['High'].rolling(5, center=True).max()]['High']
+# levels = pd.concat([supports, resistances])
+# levels = levels[abs(levels.diff()) > 2]
+# print(levels)
 
-# plot the data
-fig = make_subplots(
-    rows=2, cols=1,  
-    shared_xaxes=True,  
-    vertical_spacing=0.1,  
-    row_heights=[0.8, 0.2]  
-)
-fig.add_trace(
-    py.graph_objs.Candlestick(
-        x=stockDataOriginal.index,
-        open=stockDataOriginal['Open'],
-        high=stockDataOriginal['High'],
-        low=stockDataOriginal['Low'],
-        close=stockDataOriginal['Close'],
-        name='Candlestick',
-    ),
-    row=1, col=1    
-)
+# # Localize the index
+# stockDataOriginal.index = stockDataOriginal.index.tz_localize(None)
 
-fig.add_trace(
-    py.graph_objs.Candlestick(
-        x=stockData.index,
-        open=stockData['Open'],
-        high=stockData['High'],
-        low=stockData['Low'],
-        close=stockData['Close'],
-        name='Pattern',
-        increasing=dict(line=dict(color='orange'), fillcolor='orange'),
-        decreasing=dict(line=dict(color='purple'), fillcolor='purple'),
-    ),
-    row=1, col=1    
-)
+# # Plot the data
+# fig = make_subplots(
+#     rows=2, cols=1,  
+#     shared_xaxes=True,  
+#     vertical_spacing=0.1,  
+#     row_heights=[0.8, 0.2]  
+# )
 
-# Add a volume bar subchart
-fig.add_trace(
-    py.graph_objs.Bar(
-        x=stockDataOriginal.index,
-        y=stockDataOriginal['Volume'],
-        name='Volume',
-        marker_color='blue',
-    ),
-    row=2, col=1  
-)
+# # Add candlestick chart
+# fig.add_trace(
+#     go.Candlestick(
+#         x=stockDataOriginal.index,
+#         open=stockDataOriginal['Open'],
+#         high=stockDataOriginal['High'],
+#         low=stockDataOriginal['Low'],
+#         close=stockDataOriginal['Close'],
+#         name='Candlestick',
+#     ),
+#     row=1, col=1    
+# )
 
-for index, row in levels.items():
-    fig.add_shape(
-        type="line",
-        x0=index, x1=current_date,  # Extend line to the end
-        y0=row, y1=row,
-        line=dict(color="blue", width=1)
-    )
-fig.show()
+# # Add 50-day SMA line
+# fig.add_trace(
+#     go.Scatter(
+#         x=stockDataOriginal.index,
+#         y=stockDataOriginal['50_day_SMA'],
+#         name='50-day SMA',
+#         line=dict(color='green', width=2),
+#     ),
+#     row=1, col=1  # Specify row and col here
+# )
+
+# # Add a volume bar subchart
+# fig.add_trace(
+#     go.Bar(
+#         x=stockDataOriginal.index,
+#         y=stockDataOriginal['Volume'],
+#         name='Volume',
+#         marker_color='blue',
+#     ),
+#     row=2, col=1  
+# )
+
+# # # Add support and resistance lines
+# # for index, row in levels.items():
+# #     fig.add_shape(
+# #         type="line",
+# #         x0=index, x1=current_date,  # Extend line to the end
+# #         y0=row, y1=row,
+# #         line=dict(color="blue", width=1)
+# # )
+
+# # Update layout
+# fig.update_layout(
+#     title=f"{symbol_tester} Candlestick Chart with 50-day SMA, Support/Resistance, and Volume",
+#     xaxis_title="Date",
+#     yaxis_title="Price",
+#     xaxis_rangeslider_visible=False,
+#     showlegend=True
+# )
+
+# # Show the chart
+# fig.show()
 
 # # Test for get_pattern_descriptions()
 # pattern_tester = "CDLENGULFING"
