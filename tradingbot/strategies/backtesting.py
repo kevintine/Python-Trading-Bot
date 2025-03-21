@@ -26,14 +26,14 @@ from collections import deque
 # 10 stocks in the nyse worth between 10-60 dollars
 # ["BAC", "T", "PFE", "VZ", "CSCO", "F", "GE", "FCX", "X", "MTCH", "TOST", "TEVA", "AMCR", "AMC", "AMN", "AMD"]
 
-
+# "BAC", "T", "PFE", "VZ", "CSCO", "F", "GE", 
 
 def main():
     # Parameters
-    symbols = ["BAC", "T", "PFE", "VZ", "CSCO", "F", "GE", "FCX", "X", "MTCH", "TOST", "TEVA", "AMCR", "AMC", "AMN", "AMD"]
+    symbols = ["X", "MTCH", "TOST", "TEVA", "AMCR", "AMC", "AMN", "AMD"]
   # List of stocks
     lookback_period = 252  # 1-year historical data (trading days)
-    account = Account(2000)  # Create a single account
+    account = Account(25000)  # Create a single account
 
     for symbol in symbols:
         print(f"\nFetching data for {symbol}...")
@@ -89,41 +89,36 @@ def main():
             # Calcualte the sma indicator
             sma_indicator = 100 if close_price > sma_50 else 0
             # Calculate hammer pattern using in house function
-            # Use .values to pass only the numerical data (prices) to the cdl_hammer function
             new_hammer = float(cdl_hammer_bot(df["Open"], df["High"], df["Low"], df["Close"]).iloc[-1])
-
-
-
-
-            # # Print daily simulation results
-            # print(
-            #     f"Date: {date.date()}, Symbol: {symbol}, "
-            #     f"Open: {open_price:.2f}, High: {high_price:.2f}, Low: {low_price:.2f}, Close: {close_price:.2f}, "
-            #     f"Indicator: {engulfing}, Volume Indicator: {volume_indicator}, SMA Indicator: {sma_indicator}"
-            # )
+            # Calculate green candlestock
+            green_candle = 100 if close_price > open_price else 0
 
             # Run account check trades
             account.check_trades(close_price, symbol)
 
             # Buy condition: Engulfing + High Volume
-            # if engulfing == 100 and volume_indicator == 100:
-            #     num_stocks = 500 // open_price
-            #     account.add_trade(open_price, num_stocks, symbol, date)
+            if engulfing == 100 and volume_indicator == 100:
+                num_stocks = 500 // open_price
+                account.add_trade(open_price, num_stocks, symbol, date)
             # Buy condition: Hammer + High SMA
-            # if engulfing != 0 and sma_indicator == 100:
-            #     num_stocks = 500 // open_price
-            #     account.add_trade(open_price, num_stocks, symbol, date)
+            if engulfing != 0 and sma_indicator == 100:
+                num_stocks = 500 // open_price
+                account.add_trade(open_price, num_stocks, symbol, date)
             # Buy condition: High Volume + High SMA
-            # if volume_indicator == 100 and sma_indicator == 100:
-            #     num_stocks = 500 // open_price
-            #     account.add_trade(open_price, num_stocks, symbol, date)
+            if volume_indicator == 100 and sma_indicator == 100:
+                num_stocks = 500 // open_price
+                account.add_trade(open_price, num_stocks, symbol, date)
             # Buy condition: High Volume + High SMA + Engulfing
-            # if hammer != 0 and volume_indicator == 100 and sma_indicator == 100:
-            #     num_stocks = 500 // open_price
-            #     account.add_trade(open_price, num_stocks, symbol, date)
+            if hammer != 0 and volume_indicator == 100 and sma_indicator == 100:
+                num_stocks = 500 // open_price
+                account.add_trade(open_price, num_stocks, symbol, date)
             # Buy Condition: New Hammer + High SMA
             if new_hammer != 0 and sma_indicator == 100:
-                num_stocks = 300 // open_price
+                num_stocks = 2500 // open_price
+                account.add_trade(open_price, num_stocks, symbol, date)
+            # Buy Condition: Green Candle + New Hammer
+            if green_candle != 0 and new_hammer == 100:
+                num_stocks = 2500 // open_price
                 account.add_trade(open_price, num_stocks, symbol, date)
             
             

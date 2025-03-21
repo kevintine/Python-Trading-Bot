@@ -1,26 +1,35 @@
-# TODO
+# Stock Trading Bot
 
-2025-03-20
+This is a Python-based stock trading bot designed to automate the process of analyzing stock market data and executing trades based on predefined strategies.
 
-- Visualize custom hammer chart on web app *DONE*
-- Visualize support and resistance on web app *DONE*
-- Visualize buy positions on web app
-    - We should create a strategy class first that can be used interchangebly between the web app and trading bot
+## 🚀 Purpose
 
-- Review custom hammer on bot *DONE*
+The goal of this project is to create an intelligent trading system that:
+- Analyzes historical and live market data
+- Identifies trading signals using technical indicators and candlestick patterns
+- Backtests strategies on historical data
+- Simulates and executes trades through brokerage APIs (e.g., Alpaca)
+- Visualizes indicators and trade signals on a candlestick chart. 
 
-- Continue to test strategies for today *DONE* 
+This bot helps eliminate emotional decision-making and allows for consistent, rules-based trading strategies to be tested and deployed in real-time.
 
-- Move all work over to backtesting folder *DONE*
-- Initialize trading with the alpaca trade API
+## 📦 Features
+- Strategy backtesting with historical data
+- Candlestick pattern recognition (e.g., Hammer, Doji)
+- Custom technical indicators and filters
+- Real-time data fetching and visualization
 
-DEBUGGING
+## 📈 Technologies
+- Python
+- Pandas, NumPy
+- TA-Lib (Technical Analysis Library)
+- Plotly for charting
+- Flask for web interface
 
-The values being passed into the new hammer function for the trading bot are <class 'numpy.ndarray'>
+## ⚠️ Disclaimer
+This bot is for educational and research purposes only. Trading stocks involves risk, and there are no guarantees of profit. Always do your own research or consult with a financial advisor before making any investment decisions.
 
 
-
-2025-03-21
 
 
 

@@ -20,7 +20,7 @@ class Trade:
             self.current_position = new_position  # Set new high price
 
         # Condition 1: Sell if price drops 5% from most recent high
-        if new_position < self.current_position * 0.95:
+        if new_position < self.current_position * 0.90:
             self.sell_position = new_position
             return True
 
