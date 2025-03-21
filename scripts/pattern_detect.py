@@ -1,9 +1,12 @@
+import os
+import sys
+sys.path.append(os.path.abspath('../tradingbot/models'))
 import talib
 import pandas as pd
 import yfinance as yf
 import mplfinance as mpf
 from datetime import datetime, timedelta
-
+from strategies import cdl_hammer_web
 # Current Date
 current_date = datetime.now()
 
@@ -11,6 +14,8 @@ current_date = datetime.now()
 # Format the date as a string in the desired format
 one_year_ago = current_date - timedelta(days=365)
 date_one_year_ago = one_year_ago.strftime("%Y-%m-%d")
+date_three_years_ago = one_year_ago - timedelta(days=1095)
+date_five_years_ago = one_year_ago - timedelta(days=1825)
 current_date = datetime.now().strftime("%Y-%m-%d")
 
 # FUNCTION: Returns the current date
@@ -26,11 +31,19 @@ def get_past_date_by_day(numOfDays):
 
 # This takes a string of a stock symbol and returns the data for that stock from 2022-01-01 till today's date
 def get_stock_with_symbol(symbol):
-    data = yf.download(symbol, start=date_one_year_ago, end=current_date)
+    data = yf.download(symbol, start=date_five_years_ago, end=current_date)
     return data
 # This takes a string of a stock symbol and a pattern of a candlestick pattern and returns the data which contains that pattern int the stock data
 def get_candlestick_pattern_from_stock(symbol, pattern):
     data = yf.download(symbol, start=date_one_year_ago, end=current_date)
+    df = data[['Open', 'High', 'Low', 'Close']].copy()
+    if pattern == "HAMMER":
+        result = cdl_hammer_web(data['Open'].squeeze(),
+        data['High'].squeeze(),
+        data['Low'].squeeze(),
+        data['Close'].squeeze(), 1, 1)
+        return result
+    
     pattern_function = getattr(talib, pattern)
     result = pattern_function(
         data['Open'].squeeze(),
@@ -38,7 +51,6 @@ def get_candlestick_pattern_from_stock(symbol, pattern):
         data['Low'].squeeze(),
         data['Close'].squeeze()
     )
-    print(result)
     return result
 
 get_candlestick_pattern_from_stock("AC.TO", "CDLHAMMER")

@@ -1,17 +1,28 @@
-# Candlestick Pattern Identifier 
+# TODO
 
-This project allows you to visualize stock price movements using candlestick charts. It is able to identify different candlestick patterns within the chart to help visualize and identify different patterns. 
+2025-03-20
 
-## Features
-- Display historical stock data in a candlestick format.
-- Adjustable time frames to analyze short-term and long-term trends.
-- Interactive chart with zoom and pan functionality.
-- Integrated with real-time or historical stock data APIs.
-- Identify multiple types of patterns on multiple stocks. 
+- Visualize custom hammer chart on web app *DONE*
+- Visualize support and resistance on web app *DONE*
+- Visualize buy positions on web app
+    - We should create a strategy class first that can be used interchangebly between the web app and trading bot
 
-## Issues Currently
+- Review custom hammer on bot *DONE*
 
-Having issues with TA-Lib and it's .whl file and deploying on a site. 
+- Continue to test strategies for today *DONE* 
+
+- Move all work over to backtesting folder *DONE*
+- Initialize trading with the alpaca trade API
+
+DEBUGGING
+
+The values being passed into the new hammer function for the trading bot are <class 'numpy.ndarray'>
+
+
+
+2025-03-21
+
+
 
 
 

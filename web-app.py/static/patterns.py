@@ -5,7 +5,9 @@ patterns = {
     "CDLENGULFING": "Engulfing Pattern",
     "CDLHAMMER": "Hammer",
     "CDLINVERTEDHAMMER": "Inverted Hammer",
-    "CDLMORNINGSTAR": "Morning Star"
+    "CDL3WHITESOLDIERS": "Three Advancing White Soldiers",
+    "CDLMORNINGSTAR": "Morning Star",
+    "HAMMER": "Kevin Hammer"
 }
 
 stocks = {
@@ -16,6 +18,10 @@ stocks = {
     "AC.TO": "Air Canada",
     "CM.TO": "Canadian Imperial Bank of Commerce",
     "AW.TO": "A & W Food Services of Canada Inc.",
+    "INTC": "Intel Corporation",
+    "AMD": "Advanced Micro Devices, Inc.",
+    "MSFT": "Microsoft Corporation",
+    "AAPL": "Apple Inc."
 }
 
 pattern_descriptions = {
