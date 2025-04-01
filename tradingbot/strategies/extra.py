@@ -47,6 +47,48 @@ def buy(talib, volume):
     print("No buys!")
     return 0
 
+def restore_yfinance_structure(df):
+    """
+    Takes a simplified or nested Series-based rolling window DataFrame and restores it to the 
+    yfinance-style structure with flat float values, expected columns, and a datetime index.
+
+    Parameters:
+        df (pd.DataFrame): DataFrame with nested Series or flat OHLC columns
+
+    Returns:
+        pd.DataFrame: DataFrame with yfinance-style columns (Open, High, Low, Close, Adj Close, Volume)
+    """
+    df_restored = df.copy()
+
+    # Flatten nested Series inside each cell (replacing deprecated applymap)
+    for col in df_restored.columns:
+        df_restored[col] = df_restored[col].apply(lambda x: x.iloc[0] if isinstance(x, pd.Series) else x)
+
+    # Add missing yfinance-style columns
+    if 'Adj Close' not in df_restored.columns:
+        df_restored['Adj Close'] = df_restored['Close']
+    
+    if 'Volume' not in df_restored.columns:
+        df_restored['Volume'] = 0  # Placeholder value
+
+    # Enforce correct data types
+    for col in df_restored.columns:
+        if col == "Volume":
+            df_restored[col] = df_restored[col].astype(int)
+        else:
+            df_restored[col] = pd.to_numeric(df_restored[col], errors='coerce')
+
+    # Reorder columns to match yfinance format
+    columns_order = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
+    df_restored = df_restored[columns_order]
+
+    # Optional: add datetime index if missing
+    if not isinstance(df_restored.index, pd.DatetimeIndex):
+        df_restored.index = pd.date_range(end=pd.Timestamp.today(), periods=len(df_restored))
+
+    return df_restored
+
+
 
 
 

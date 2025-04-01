@@ -1,6 +1,7 @@
 import os
 import sys
 sys.path.append(os.path.abspath('../scripts'))
+sys.path.append(os.path.abspath('../tradingbot/models'))
 import plotly as py
 from plotly.subplots import make_subplots
 import pandas as pd
@@ -8,6 +9,7 @@ import datetime as dt
 import yfinance as yf
 from pattern_detect import get_stock_with_symbol, get_candlestick_pattern_from_stock, get_current_date, get_past_date_by_day
 from static.patterns import pattern_descriptions
+from strategies import cdl_hammer_web, cdl_hammer_bot, get_engulfing, get_hammer, get_volume_indicator, get_green_candle, get_sma_indicator, get_volume_indicator
 
 # Keep dates as datetime objects
 current_date = dt.datetime.now()
@@ -70,7 +72,7 @@ def get_chart_with_pattern(symbol, pattern):
     data = data.to_frame(name='Pattern')
 
     # Get stock data
-    stockDataOriginal = yf.Ticker(symbol).history(period='1d', start=five_years_ago, end=current_date)
+    stockDataOriginal = yf.Ticker(symbol).history(period='1d', start=one_year_ago, end=current_date)
     
     # Calculate 50-day SMA and 50-day average volume
     stockDataOriginal['50_day_SMA'] = stockDataOriginal['Close'].rolling(window=50).mean()
@@ -95,6 +97,7 @@ def get_chart_with_pattern(symbol, pattern):
     stockData['Volume_Spike'] = stockData['Volume'] > (1.3 * stockData['50_day_avg_volume'])
     
     # Get buy positions
+    # use the functions 
     
 
     # Plot the data
@@ -164,15 +167,6 @@ def get_chart_with_pattern(symbol, pattern):
     #         line=dict(color="blue", width=1)
     # )
 
-    # # Add vertical lines for volume spikes
-    # for date in spike_dates:
-    #     fig.add_vline(
-    #         x=stockDataOriginal.index,  # ✅ Now a properly formatted string
-    #         line=dict(color="red", width=1.5, dash="dash"),
-    #         annotation_text="Pattern + Volume Spike",
-    #         annotation_position="top left",
-    #     )
-
     # Update layout
     fig.update_layout(
         title=f"{pattern} for {symbol}",
@@ -218,7 +212,6 @@ def get_pattern_descriptions(pattern):
 # resistances = stockDataOriginal[stockDataOriginal['High'] == stockDataOriginal['High'].rolling(5, center=True).max()]['High']
 # levels = pd.concat([supports, resistances])
 # levels = levels[abs(levels.diff()) > 2]
-# print(levels)
 
 # # Localize the index
 # stockDataOriginal.index = stockDataOriginal.index.tz_localize(None)

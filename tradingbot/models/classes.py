@@ -15,21 +15,34 @@ class Trade:
         pass
 
     def sell(self, new_position):
-        # Update the most recent high price
+        # Update most recent high if price increases
         if new_position > self.current_position:
-            self.current_position = new_position  # Set new high price
+            self.current_position = new_position
 
-        # Condition 1: Sell if price drops 5% from most recent high
-        if new_position < self.current_position * 0.90:
+        # Gradual Trailing Stop to Lock in Profits
+        if self.current_position >= self.buy_position * 1.05:  # Start trailing at 5% gain
+            if new_position < self.current_position * 0.98:  # 2% drop from recent high
+                self.sell_position = new_position
+                return True
+
+        if self.current_position >= self.buy_position * 1.10:  # Tighten at 10% gain
+            if new_position < self.current_position * 0.99:  # 1% drop from high
+                self.sell_position = new_position
+                return True
+
+        # HARD STOP: Reduce max loss from 15% to 10-12%
+        if new_position < self.buy_position * 0.90:  
             self.sell_position = new_position
             return True
 
-        # Condition 2: Sell if price drops 20% below buy price
-        if new_position < self.buy_position * 0.80:
+        # PROFIT TARGET: Sell at 18% (Lower than 20% to lock in more)
+        if new_position >= self.buy_position * 1.18:
             self.sell_position = new_position
             return True
-        
-        return False  # No sell triggered
+
+        return False
+
+
 
 
 
@@ -55,7 +68,7 @@ class Account:
         print(f"Bought {num_of_stocks} shares of {stock_name} at {position} per share")
         return
     
-    def check_trades(self, sell_position, symbol):
+    def check_trades(self, sell_position, symbol, date):
         for trade in self.trades[:]:  # Iterate over a copy of the list to avoid modification issues
             if trade.sell(sell_position) is True and trade.stock_name == symbol:
                 # Update balance
@@ -63,7 +76,8 @@ class Account:
                 
                 # Store trade details in sold_trades
                 self.sold_trades.append({
-                    "date": trade.date,
+                    "date": trade.date,  # Original buy date
+                    "sell_date": date,   # New: passed sell date
                     "stock": trade.stock_name,
                     "buy_position": trade.buy_position,
                     "sell_position": trade.sell_position,
@@ -96,16 +110,17 @@ class Account:
     
     def print_sold_trades(self):
         for trade in self.sold_trades:
-            print(f"Trade Details: Date: {trade['date']}, "
-            f"Stock: {trade['stock']}, "
-            f"Buy Price: {trade['buy_position']:.2f}, "
-            f"Sell Price: {trade['sell_position']:.2f}, "
-            f"Shares: {trade['num_of_stocks']}, "
-            f"Profit/Loss: {trade['profit/loss']:.2f}")
-
+            print(
+                f"Trade Details: Stock: {trade['stock']}, "
+                f"B-Date: {trade['date']}, "
+                f"B-Price: {trade['buy_position']:.2f}, "
+                f"S-Date: {trade['sell_date']}, "
+                f"S-Price: {trade['sell_position']:.2f}, "
+                f"Shares: {trade['num_of_stocks']}, "
+                f"Profit/Loss: {trade['profit/loss']:.2f}"
+            )
 
         return
-
 
 # this class JUST ONE of many different types of signals i will be creating. 
 # This signal will send a signal based off of a candlestick pattern and volume
