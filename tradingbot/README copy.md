@@ -32,6 +32,19 @@ We learned something today, you need to know what kind of trading you are lookin
 Swing trading or Day trading, or whatever else kind of trading. All or most parameters 
 must be changed. 
 
+2025-03-23
+
+- Visualize buy positions on web app
+    - We should create a strategy class first that can be used interchangebly between the web app and trading bot *DONE*
+
+2025-03-25
+
+- Analyze the current test to identify the multiple losses. I was getting burned from the dips. 
+- A strategy that further refines uses of the trend line
+
+2025-03-26
+
+We may have to give up on the charting aspect, the trading bot has gotten too big to integrate with the chart. May need to start a new chart with a fully developed trading bot. Pain
 
 
 
