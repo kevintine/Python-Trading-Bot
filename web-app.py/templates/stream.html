@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Live Stock Stream{% endblock %}
+
+{% block head %}
+<style>
+    .stock-box {
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    .positive {
+        background-color: rgba(40, 167, 69, 0.1);
+        border-left: 4px solid #28a745;
+    }
+    .negative {
+        background-color: rgba(220, 53, 69, 0.1);
+        border-left: 4px solid #dc3545;
+    }
+    .stock-name {
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    .stock-price {
+        font-size: 1.3rem;
+        font-weight: 700;
+    }
+    .stock-change {
+        font-size: 0.9rem;
+    }
+    #addStockForm {
+        margin-bottom: 20px;
+    }
+    #stocksContainer {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 15px;
+    }
+    .remove-stock {
+        float: right;
+        cursor: pointer;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Live Stock Monitor</h5>
+                </div>
+                <div class="card-body">
+                    <div id="addStockForm" class="mb-4">
+                        <div class="input-group">
+                            <input type="text" id="newStockSymbol" class="form-control" placeholder="e.g. AAPL, TSLA">
+                            <button id="addStockBtn" class="btn btn-success">
+                                <i class="fas fa-plus me-2"></i>Add Stock
+                            </button>
+                        </div>
+                        <div id="addStockError" class="text-danger mt-2"></div> <!-- Error display -->
+                    </div>
+                    
+                    <div id="stocksContainer">
+                        <!-- Stock boxes will appear here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/stream.js') }}"></script>
+<script>
+// Stock data cache
+const stockDataCache = {};
+
+// Function to create or update stock box
+function updateStockBox(symbol, data) {
+    // Store previous close for change calculation
+    const prevClose = stockDataCache[symbol]?.price || data.price;
+    const changePercent = ((data.price - prevClose) / prevClose * 100).toFixed(2);
+    
+    // Cache current data
+    stockDataCache[symbol] = {
+        price: data.price,
+        changePercent: changePercent,
+        lastUpdated: new Date()
+    };
+    
+    // Get or create stock box
+    let stockBox = document.getElementById(`stock-${symbol}`);
+    if (!stockBox) {
+        stockBox = document.createElement('div');
+        stockBox.id = `stock-${symbol}`;
+        stockBox.className = 'stock-box';
+        stockBox.innerHTML = `
+            <span class="remove-stock" onclick="removeStock('${symbol}')">
+                <i class="fas fa-times"></i>
+            </span>
+            <div class="stock-name">${symbol}</div>
+            <div class="stock-price">$${data.price.toFixed(2)}</div>
+            <div class="stock-change">
+                <span class="change-percent">${changePercent}%</span>
+                <span class="change-arrow"></span>
+            </div>
+        `;
+        document.getElementById('stocksContainer').appendChild(stockBox);
+    }
+    
+    // Update existing box
+    const priceElement = stockBox.querySelector('.stock-price');
+    const changeElement = stockBox.querySelector('.change-percent');
+    const arrowElement = stockBox.querySelector('.change-arrow');
+    
+    priceElement.textContent = `$${data.price.toFixed(2)}`;
+    changeElement.textContent = `${changePercent}%`;
+    
+    // Set color based on change
+    if (parseFloat(changePercent) >= 0) {
+        stockBox.classList.remove('negative');
+        stockBox.classList.add('positive');
+        arrowElement.innerHTML = ' <i class="fas fa-arrow-up"></i>';
+    } else {
+        stockBox.classList.remove('positive');
+        stockBox.classList.add('negative');
+        arrowElement.innerHTML = ' <i class="fas fa-arrow-down"></i>';
+    }
+}
+
+// Function to remove stock box
+function removeStock(symbol) {
+    const stockBox = document.getElementById(`stock-${symbol}`);
+    if (stockBox) {
+        stockBox.remove();
+        delete stockDataCache[symbol];
+        // You may want to send a request to server to stop streaming this symbol
+    }
+}
+
+// Add stock button handler
+document.getElementById('addStockBtn').addEventListener('click', function() {
+    const symbolInput = document.getElementById('newStockSymbol');
+    const symbol = symbolInput.value.trim().toUpperCase();
+    
+    if (symbol && !document.getElementById(`stock-${symbol}`)) {
+        // Initialize with current price (you'll replace this with real data)
+        updateStockBox(symbol, { price: 0 });
+        
+        // Send to server to start streaming this symbol
+        fetch('/add_stock', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ symbol: symbol })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                alert(`Error adding stock: ${data.message}`);
+                removeStock(symbol);
+            }
+        });
+        
+        symbolInput.value = '';
+    } else if (document.getElementById(`stock-${symbol}`)) {
+        alert('This stock is already being monitored');
+    }
+});
+
+// Handle incoming trade data
+socket.on('trade_update', function(data) {
+    if (stockDataCache[data.symbol]) {
+        updateStockBox(data.symbol, data);
+    }
+});
+</script>
+{% endblock %}
