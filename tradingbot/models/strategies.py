@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from collections import deque
 from scipy.signal import argrelextrema
-import extra 
+# import extra
 
 # Hammer function for the trading bot
 # the lower shadow and upper shadown multiplier can be adjusted

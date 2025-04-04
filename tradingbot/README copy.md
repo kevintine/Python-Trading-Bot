@@ -46,6 +46,16 @@ must be changed.
 
 We may have to give up on the charting aspect, the trading bot has gotten too big to integrate with the chart. May need to start a new chart with a fully developed trading bot. Pain
 
+2025-04-03
+
+Completed the backtesting. Anymore and we would just be approaching scope creep. The charts have been created. 
+
+It's best to use Alpaca websockets api to fetch data and send buy signals
+
+
+- Create a live websockets script to send data to the bot. *DONE*
+- Redo the web app to display the live data.
+
 
 
 
