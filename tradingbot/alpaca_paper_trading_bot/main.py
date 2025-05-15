@@ -18,8 +18,15 @@ import warnings
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-API_KEY = "PKGJHW34RDC8CG26S1OB"
-API_SECRET = "NDu8J0yVPfo7enmZaTFBPSUpbCVdw1ccWYWExNxI"
+from dotenv import load_dotenv
+from pathlib import Path
+import os
+
+env_path = Path('../../') / '.env'
+load_dotenv(dotenv_path=env_path)
+API_KEY = os.getenv('YOUR_API_KEY_ID')
+API_SECRET = os.getenv('YOUR_SECRET_KEY')
+
 BASE_URL = "https://paper-api.alpaca.markets"  
 
 DB_CONFIG = {
