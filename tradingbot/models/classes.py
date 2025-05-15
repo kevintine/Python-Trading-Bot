@@ -1,50 +1,98 @@
 import yfinance as yf
 import talib as ta
 import pandas as pd
+import psycopg2
+import psycopg2.extras
+from typing import List, Dict, Optional
 
 class Trade:
-    def __init__(self, buy_position, num_of_stocks, stock_name, date):
+    def __init__(
+        self,
+        buy_position: float,
+        num_of_stocks: int,
+        stock_name: str,
+        date: str,
+        # Risk management parameters (defaults can be overridden)
+        trailing_start: float = 1.05,  # Start trailing after 5% gain
+        initial_trail_percent: float = 0.98,  # 2% drop from peak triggers sell
+        tight_trail_threshold: float = 1.10,  # Tighten trail after 10% gain
+        tight_trail_percent: float = 0.99,  # 1% drop triggers sell after threshold
+        hard_stop_loss: float = 0.90,  # 10% max loss
+        profit_target: float = 1.12,  # 12% profit target
+        volatility_threshold: float = 1.0  
+    ):
         self.buy_position = buy_position
         self.sell_position = None
         self.current_position = buy_position
         self.num_of_stocks = num_of_stocks
         self.stock_name = stock_name
         self.date = date
+        self.highest_position = buy_position
+        
+        # Risk management parameters
+        self.trailing_start = trailing_start
+        self.initial_trail_percent = initial_trail_percent
+        self.tight_trail_threshold = tight_trail_threshold
+        self.tight_trail_percent = tight_trail_percent
+        self.hard_stop_loss = hard_stop_loss
+        self.profit_target = profit_target
+        self.volatility_threshold = volatility_threshold
     
     def buy(self):
-        pass
+        pass  # Your existing buy logic
 
-    def sell(self, new_position):
-        # Update most recent high if price increases
-        if new_position > self.current_position:
-            self.current_position = new_position
+    def sell(self, new_position: float) -> bool:
+        """
+        Enhanced multi-condition exit strategy with:
+        - Cleaner price tracking
+        - Configurable thresholds
+        - Removed print statements (let parent handle output)
+        - Added validation
+        """
+        # Validate inputs
+        if not isinstance(new_position, (int, float)) or new_position <= 0:
+            return False
 
-        # Gradual Trailing Stop to Lock in Profits
-        if self.current_position >= self.buy_position * 1.05:  # Start trailing at 5% gain
-            if new_position < self.current_position * 0.98:  # 2% drop from recent high
-                self.sell_position = new_position
-                return True
+        # Track current position
+        self.current_position = new_position
 
-        if self.current_position >= self.buy_position * 1.10:  # Tighten at 10% gain
-            if new_position < self.current_position * 0.99:  # 1% drop from high
-                self.sell_position = new_position
-                return True
+        # Track highest price seen (for trailing stops)
+        self.highest_position = max(self.current_position, self.highest_position)
 
-        # HARD STOP: Reduce max loss from 15% to 10-12%
-        if new_position < self.buy_position * 0.90:  
-            self.sell_position = new_position
+        # Calculate dynamic thresholds
+        stop_loss_price = self.buy_position * self.hard_stop_loss * self.volatility_threshold
+        profit_target_price = self.buy_position * self.profit_target
+        loose_trail_trigger = self.highest_position * self.initial_trail_percent
+        tight_trail_trigger = self.highest_position * self.tight_trail_percent
+
+        # Exit conditions (in order of priority)
+        # 1. Hard stop loss
+        if self.current_position <= stop_loss_price:
+            print(f"Hard stop loss triggered for {self.stock_name} at {self.current_position:.2f} per share")
+            self.sell_position = self.current_position
             return True
 
-        # PROFIT TARGET: Sell at 18% (Lower than 20% to lock in more)
-        if new_position >= self.buy_position * 1.18:
-            self.sell_position = new_position
+        # 2. Profit target
+        if self.current_position >= profit_target_price:
+            print(f"Profit target triggered for {self.stock_name} at {self.current_position:.2f} per share")
+            self.sell_position = self.current_position
+            return True
+
+        # 3. Tight trailing stop (after reaching larger threshold)
+        if (self.highest_position >= self.buy_position * self.tight_trail_threshold and
+                self.current_position <= tight_trail_trigger):
+            print(f"Tight trailing stop triggered for {self.stock_name} at {self.current_position:.2f} per share")
+            self.sell_position = self.current_position
+            return True
+
+        # 4. Regular trailing stop (after reaching smaller threshold)
+        if (self.highest_position >= self.buy_position * self.trailing_start and
+                self.current_position <= loose_trail_trigger):
+            print(f"Regular trailing stop triggered for {self.stock_name} at {self.current_position:.2f} per share")
+            self.sell_position = self.current_position
             return True
 
         return False
-
-
-
-
 
 
 # Created at the beginning of the program to keep track of all trades and overall position
@@ -54,44 +102,58 @@ class Account:
         self.trades = []
         self.position_total = 0
         self.sold_trades = []
+        self.pending_trades = []
 
-    def add_trade(self, position, num_of_stocks, stock_name, date):
+    def add_trade(self, buy_position, num_of_stocks, stock_name, date, trailing_start, initial_trail_percent, tight_trail_threshold, tight_trail_percent, hard_stop_loss, profit_target, volatility_threshold):
         # check if the balance of the account is greater than the cost of the trade
-        if self.balance < position * num_of_stocks:
+        if self.balance < buy_position * num_of_stocks:
             return
         # create a trade object and add it to the trades list
-        trade = Trade(position, num_of_stocks, stock_name, date)
+        trade = Trade(buy_position=buy_position, 
+                      num_of_stocks=num_of_stocks, 
+                      stock_name=stock_name, 
+                      date=date, 
+                      trailing_start=trailing_start, 
+                      initial_trail_percent=initial_trail_percent, 
+                      tight_trail_threshold=tight_trail_threshold, 
+                      tight_trail_percent=tight_trail_percent, 
+                      hard_stop_loss=hard_stop_loss, 
+                      profit_target=profit_target, 
+                      volatility_threshold=volatility_threshold)
         self.trades.append(trade)
         # subtract the cost of the trade from the balance
-        self.balance -= position * num_of_stocks
+        self.balance -= buy_position * num_of_stocks
         # print the transaction
-        print(f"Bought {num_of_stocks} shares of {stock_name} at {position} per share")
+        print(f"Bought {num_of_stocks} shares of {stock_name} at {buy_position} per share")
         return
-    
+    def add_pending_trade(self, num_of_stocks, stock_name, date):
+        self.pending_trades.append((num_of_stocks, stock_name, date))
+        return
     def check_trades(self, sell_position, symbol, date):
         for trade in self.trades[:]:  # Iterate over a copy of the list to avoid modification issues
-            if trade.sell(sell_position) is True and trade.stock_name == symbol:
-                # Update balance
-                self.balance += trade.sell_position * trade.num_of_stocks
-                
-                # Store trade details in sold_trades
-                self.sold_trades.append({
-                    "date": trade.date,  # Original buy date
-                    "sell_date": date,   # New: passed sell date
-                    "stock": trade.stock_name,
-                    "buy_position": trade.buy_position,
-                    "sell_position": trade.sell_position,
-                    "num_of_stocks": trade.num_of_stocks,
-                    "profit/loss": (trade.sell_position - trade.buy_position) * trade.num_of_stocks
-                })
-                
-                # Print trade details
-                print(f"Sold {trade.num_of_stocks} shares of {trade.stock_name} at {trade.sell_position:.2f} per share. "
-                    f"Bought at {trade.buy_position:.2f}. "
-                    f"Profit/Loss: {(trade.sell_position - trade.buy_position) * trade.num_of_stocks:.2f}")
+            if trade.stock_name == symbol:  # Added holding period check
+                if trade.sell(sell_position) is True:
+                    # Update balance
+                    self.balance += trade.sell_position * trade.num_of_stocks
+                    
+                    # Store trade details in sold_trades
+                    self.sold_trades.append({
+                        "date": trade.date,
+                        "sell_date": date,
+                        "stock": trade.stock_name,
+                        "buy_position": trade.buy_position,
+                        "sell_position": trade.sell_position,
+                        "num_of_stocks": trade.num_of_stocks,
+                        "profit/loss": (trade.sell_position - trade.buy_position) * trade.num_of_stocks
+                    })
+                    
+                    # Print trade details
+                    print(f"Sold {trade.num_of_stocks} shares of {trade.stock_name} at {trade.sell_position:.2f} per share. "
+                        f"Bought at {trade.buy_position:.2f}. "
+                        f"Profit/Loss: {(trade.sell_position - trade.buy_position) * trade.num_of_stocks:.2f}")
 
-                # Remove the trade from active trades
-                self.trades.remove(trade)
+                    # Remove the trade from active trades
+                    self.trades.remove(trade)
         
         return 0
 
@@ -122,65 +184,59 @@ class Account:
 
         return
 
-# this class JUST ONE of many different types of signals i will be creating. 
-# This signal will send a signal based off of a candlestick pattern and volume
-class Signal:
-    def __init__(self, stock, pattern, start, end):
-        self.volume_chart = None
-        self.cdl_chart = None
-        self.data_chart = None
-        self.stock = stock
-        self.pattern = pattern
-        self.start = start
-        self.end = end
-
-    # FUNCTION: to get ta-lib cdl pattern and sets self.cdl_pattern attribute
-    def initialize_cdl_pattern(self):
-        # get cdl pattern
-        # takes a stock string and pattern string
-        # some issues:
-        # maybe two years ago, yfinance used to return data a certain way and now its changed where ta-lib wasnt able to take in its values 
-        # i had to change the code for ta-lib to continue to accept a pandas series where yfinance was give it a pandas dataframe. 
-        # yfinance issue
-        data = yf.download(self.stock, start=self.start,end=self.end)
-        pattern_function = getattr(ta, self.pattern)
-        integer = pattern_function(data['Open'].squeeze(), data['High'].squeeze(), data['Low'].squeeze(), data['Close'].squeeze())
-        self.cdl_chart = integer
-        return 
+    def get_balance(self):
+        return self.balance
+class Database:
+    def __init__(self, host: str, user: str, password: str, dbname: str, port: int = 5432):
+        """
+        Simple PostgreSQL database wrapper
+        
+        Args:
+            host: Database host
+            user: Database username
+            password: Database password
+            dbname: Database name
+            port: Database port (default: 5432)
+        """
+        self.connection_params = {
+            'host': host,
+            'user': user,
+            'password': password,
+            'dbname': dbname,
+            'port': port
+        }
     
-    # FUNCTION: get instances of above average volume and sets self.volume_chart attribute
-    def initialize_above_avg_volume(self):
-        # calculate the average volume and pick out days where the volume is 1.4 times higher than that
-        # return something accurate like the ta-lib pattern with 0, 100 and -100
-        data = yf.download(self.stock, start=self.start,end=self.end)
-        volume = data['Volume'].squeeze().mean()
-        threshold = volume * 1.7
-        volume_indicator = data['Volume'].squeeze().apply(lambda x: 100 if x > threshold else 0)
-        volume_df = pd.DataFrame({
-            'Date': data.index,
-            'Volume Indicator': volume_indicator
-        })
-        volume_df = volume_df["Volume Indicator"]
-        self.volume_chart = volume_df
-        return 
-   
-    # FUNCTION: combine both cdl and volume charts to set data_chart attribute
-    def get_data_chart(self):
-        if self.cdl_chart is None or self.volume_chart is None:
-            print("cdl_chart or volume chart missing to get data_chart")
-            return
-        self.data_chart = yf.download(self.stock, start=self.start,end=self.end)
-        self.data_chart["Talib_Pattern"] = self.cdl_chart
-        self.data_chart["Volume_Pattern"] = self.volume_chart
-        return self.data_chart
-    
-    def __init__(self, stock, pattern, start, end):
-        self.volume_chart = None
-        self.cdl_chart = None
-        self.data_chart = None
-        self.stock = stock
-        self.pattern = pattern
-        self.start = start
-        self.end = end
-    def action():
-        pass
+    def query(self, sql: str, params: Optional[tuple] = None, fetch: bool = True) -> Optional[List[Dict]]:
+        """
+        Execute a SQL query and return results
+        
+        Args:
+            sql: SQL query string
+            params: Tuple of query parameters
+            fetch: Whether to return results (use False for write operations without RETURNING)
+            
+        Returns:
+            List of dictionaries (for SELECT/RETURNING) or None
+        """
+        conn = None
+        try:
+            conn = psycopg2.connect(**self.connection_params)
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cursor:
+                cursor.execute(sql, params)
+                
+                if fetch:
+                    result = [dict(row) for row in cursor.fetchall()]
+                    conn.commit()  # MUST commit before returning for RETURNING queries
+                    return result
+                else:
+                    conn.commit()  # Commit write operations
+                    return None
+                    
+        except Exception as e:
+            print(f"Database error: {e}")
+            if conn:
+                conn.rollback()
+            raise
+        finally:
+            if conn:
+                conn.close()

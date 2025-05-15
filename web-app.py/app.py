@@ -1,149 +1,105 @@
-import os
-import sys
-from pathlib import Path
-import threading
-import asyncio
-from decouple import config
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, render_template
 from flask_socketio import SocketIO
+import alpaca_trade_api as tradeapi
+import asyncio
+import threading
+import queue
+from dotenv import load_dotenv
+from pathlib import Path
+import os
 
-# Get the absolute path to the project root (Python Trading Bot folder)
-project_root = Path(__file__).resolve().parent.parent
-
-# Add the scripts directory to Python path
-scripts_path = str(project_root / 'tradingbot')
-sys.path.insert(0, scripts_path)  # Insert at start of path
+env_path = Path('..') / '.env'
+load_dotenv(dotenv_path=env_path)
+API_KEY = os.getenv('YOUR_API_KEY_ID')
+API_SECRET = os.getenv('YOUR_SECRET_KEY')
 
 app = Flask(__name__)
-socketio = SocketIO(app)
+socketio = SocketIO(app, async_mode='threading')
 
-# Configuration (add before route definitions)
-API_KEY = config('ALPACA_API_KEY', default='')  # Will read from .env file
-API_SECRET = config('ALPACA_API_SECRET', default='') 
+# Alpaca Configuration
+BASE_URL = 'https://paper-api.alpaca.markets'
 
-# Streaming control
-stream_active = False
-streamer = None
+# Stocks to watch
+WATCHLIST = ['AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL']
+
+# Store latest prices
+latest_prices = {symbol: {'price': 0, 'change': 0} for symbol in WATCHLIST}
+
+# Queue for thread-safe communication
+update_queue = queue.Queue()
+
+def alpaca_stream_thread():
+    async def run_stream():
+        stream = tradeapi.stream2.Stream(API_KEY, API_SECRET, base_url=BASE_URL, data_feed='iex')
+        
+        async def on_bar(bar):
+            try:
+                # Get previous close
+                prev_close = api.get_barset(bar.symbol, 'day', limit=2)[bar.symbol][0].c
+                change_pct = ((bar.close - prev_close) / prev_close) * 100
+                
+                update_queue.put({
+                    'symbol': bar.symbol,
+                    'price': bar.close,
+                    'change': change_pct
+                })
+            except Exception as e:
+                print(f"Error processing bar: {e}")
+
+        # Subscribe to bars
+        stream.subscribe_bars(on_bar, *WATCHLIST)
+        
+        # Run stream
+        await stream._run_forever()
+
+    # Create new event loop for the thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(run_stream())
+
+def process_updates():
+    while True:
+        try:
+            update = update_queue.get_nowait()
+            symbol = update['symbol']
+            latest_prices[symbol] = {
+                'price': update['price'],
+                'change': update['change']
+            }
+            
+            socketio.emit('stock_update', {
+                'symbol': symbol,
+                'price': update['price'],
+                'change': f"{update['change']:.2f}%",
+                'color': 'green' if update['change'] >= 0 else 'red'
+            })
+        except queue.Empty:
+            socketio.sleep(0.1)
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', watchlist=WATCHLIST)
 
-@app.route('/stream')
-def stream_dashboard():
-    return render_template('stream.html')
-
-@app.route('/start_stream', methods=['POST'])
-def start_stream():
-    global stream_active, streamer
-    
-    if not stream_active:
-        try:
-            # Now this import should work
-            from alpaca_stream import AlpacaStreamer
-            
-            symbols = request.json.get('symbols', ['AAPL', 'MSFT'])
-            api_key = 'PKGJHW34RDC8CG26S1OB'  # Consider moving to config/environment variables
-            api_secret = 'NDu8J0yVPfo7enmZaTFBPSUpbCVdw1ccWYWExNxI'
-            
-            streamer = AlpacaStreamer(api_key, api_secret, symbols, socketio)
-            
-            def run_stream():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(streamer.run())
-                loop.close()
-                
-            thread = threading.Thread(target=run_stream, daemon=True)
-            thread.start()
-            stream_active = True
-            return jsonify({'status': 'started'})
-        
-        except ImportError as e:
-            return jsonify({'status': 'error', 'message': str(e), 'path': sys.path}), 500
-    
-    return jsonify({'status': 'already running'})
-
-@app.route('/stop_stream')
-def stop_stream():
-    global stream_active, streamer
-    if streamer and stream_active:
-        streamer.stop()
-        stream_active = False
-        return jsonify({'status': 'stopped'})
-    return jsonify({'status': 'not running'})
-
-# Add initialization function
-def create_streamer():
-    global streamer
-    if streamer is None:
-        from alpaca_stream import AlpacaStreamer
-        if not API_KEY or not API_SECRET:
-            raise ValueError("Alpaca API credentials not configured")
-        streamer = AlpacaStreamer(API_KEY, API_SECRET, [], socketio)
-    return streamer
-
-# Modified add_stock endpoint
-@app.route('/add_stock', methods=['POST'])
-def add_stock():
-    try:
-        if not API_KEY or not API_SECRET:
-            return jsonify({
-                'success': False,
-                'message': 'API credentials not configured'
-            }), 500
-            
-        symbol = request.json.get('symbol', '').strip().upper()
-        if not symbol:
-            return jsonify({'success': False, 'message': 'No symbol provided'})
-        
-        streamer = create_streamer()
-        
-        # Initialize symbols list if not exists
-        if not hasattr(streamer, 'symbols'):
-            streamer.symbols = []
-        
-        if symbol in streamer.symbols:
-            return jsonify({
-                'success': False,
-                'message': f'{symbol} is already being tracked'
-            })
-            
-        streamer.symbols.append(symbol)
-        
-        # Start or update stream
-        if not stream_active:
-            thread = threading.Thread(target=run_stream, daemon=True)
-            thread.start()
-            stream_active = True
-        else:
-            asyncio.run_coroutine_threadsafe(streamer.resubscribe(), streamer._loop)
-        
-        return jsonify({
-            'success': True,
-            'symbol': symbol,
-            'message': f'Started tracking {symbol}'
-        })
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'message': str(e)
-        }), 500
-
-def run_stream():
-    streamer = create_streamer()
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(streamer.run())
-    finally:
-        loop.close()
-    
 @socketio.on('connect')
 def handle_connect():
-    print('Client connected')
+    # Send initial data when client connects
+    for symbol, data in latest_prices.items():
+        socketio.emit('stock_update', {
+            'symbol': symbol,
+            'price': data['price'],
+            'change': f"{data['change']:.2f}%" if data['price'] != 0 else '0.00%',
+            'color': 'green' if data['change'] >= 0 else 'red'
+        })
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=5001)
-    app.run(debug=True, port=5001)
+    # Initialize Alpaca REST client
+    api = tradeapi.REST(API_KEY, API_SECRET, BASE_URL)
+    
+    # Start Alpaca stream thread
+    threading.Thread(target=alpaca_stream_thread, daemon=True).start()
+    
+    # Start update processing thread
+    threading.Thread(target=process_updates, daemon=True).start()
+    
+    # Run Flask app
+    socketio.run(app, debug=True)

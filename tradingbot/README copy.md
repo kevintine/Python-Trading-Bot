@@ -56,6 +56,28 @@ It's best to use Alpaca websockets api to fetch data and send buy signals
 - Create a live websockets script to send data to the bot. *DONE*
 - Redo the web app to display the live data.
 
+2025-04-22
+
+Backtesting works and it apparently makes a ton of money lol
+
+Now Canada or the TSX doesn't allow automated trading, thats not a problem. We can trade and we can just use our bot to run buy and sell signals for our trades. 
+
+We will manually buy and sell trades and use the signals when to do them. 
+
+Right now buy signals are simple enough. I have to now pull existing positions from Questrade and put them into my own database so I can keep trade of all trades I make. 
+
+First I need to find out what makes each trade unique in Questrade. 
+Otherwise the script can be ran and duplicate trades can be put into my database.
+
+2. Create a a trade schema
+
+3. Check Questrade for existing trades and put them into my database
+
+4. Create a function to check all ACTIVE trades in my database for a sell signal. 
+
+5. Once a trade has been sold, render it INACTIVE.
+
+When I buy a stock, I'd like to run my script so it enters that trade into my database. 
 
 
 
