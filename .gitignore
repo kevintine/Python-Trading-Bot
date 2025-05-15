@@ -1,4 +1,7 @@
-# .gitignore
+# Ignore all .env files (root and subdirectories)
 .env
-.env*       # Also ignores variations like .env.local, .env.dev, etc.
-*.env       # Catches all .env files
+.env*
+*.env
+
+# Ignore specific JSON file in tradingbot/ directory
+/tradingbot/questrade_tokens.json
