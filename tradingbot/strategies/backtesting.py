@@ -14,7 +14,7 @@ project_root = Path(__file__).parent.parent  # Adjust based on your file locatio
 sys.path.append(str(project_root))
 
 from models.classes import Trade, Account, Database
-from models.strategies import cdl_hammer_bot, get_engulfing, get_hammer, get_sma_indicator, get_volume_indicator, get_green_candle, detect_dip_signal, detect_supports, check_for_sma_dip, smart_money_trend_strategy, volume_sma_buy_signal, check_volume_candlestick_buy_signal, swing_trade_signal, ma_crossover_strategy, check_volume_spike
+from models.strategies import hammer_below_atr
 
 start="2023-01-01"
 end="2025-01-01"
@@ -289,7 +289,7 @@ def run_simulation(full_data, account, lookback_period=252, base_position_percen
     print(f"Final Balance: ${account.balance:,.2f}")
     print(f"Total Trades: {len(account.sold_trades)}")
 
-def simulation(intraday_data, daily_data, account, lookback_period=252*2, position_percentage=0.33):
+def simulation_v1(intraday_data, daily_data, account, lookback_period=252*2, position_percentage=0.25):
     """
     Simulate trading through all available intraday data hour by hour
     
@@ -333,65 +333,146 @@ def simulation(intraday_data, daily_data, account, lookback_period=252*2, positi
     start_date = end_date - pd.Timedelta(days=lookback_period)
     filtered_intraday = combined_intraday_data.loc[start_date:end_date]  # Filter the concatenated DataFrame
 
-    for timestamp, hour_data in filtered_intraday.groupby(filtered_intraday.index):
-            # Print every timestamp being processed
-            print(f"\nProcessing {timestamp}")
             
-            # Check if this is the first trading hour of the day (typically 9:30 AM)
-            if timestamp.time() == pd.Timestamp('09:30:00').time():
+    for timestamp, hour_data in filtered_intraday.groupby(filtered_intraday.index):
+        print(f"\nProcessing {timestamp}")
+        
+        # Trading logic (only at market open)
+        if timestamp.time() == pd.Timestamp('09:30:00').time():
+            prev_day = timestamp.date() - pd.Timedelta(days=1)
+            daily_mask = (combined_daily_data.index.date == prev_day)
+            daily_prices = combined_daily_data[daily_mask]
+            
+            for symbol, symbol_data in hour_data.groupby('Symbol'):
+                current_price = symbol_data['Close'].iloc[0]
+                shares = int((500 / current_price) * position_percentage)
                 
-                # Get previous day's data
-                prev_day = timestamp.date() - pd.Timedelta(days=1)
-                daily_mask = (combined_daily_data.index.date == prev_day)
-                daily_prices = combined_daily_data[daily_mask]
-                
-                for symbol, symbol_data in hour_data.groupby('Symbol'):
-
-                    current_price = symbol_data['Close'].iloc[0]
-                    # Get number of shares to buy
-                    position_value = account.balance * position_percentage
-                    shares = int(position_value // current_price)
-                    # Get full daily history
+                if shares >= 1:
                     symbol_full_daily = combined_daily_data[
                         (combined_daily_data['Symbol'] == symbol) & 
                         (combined_daily_data.index.date <= prev_day)
                     ]
+                    signal = hammer_below_atr(symbol_full_daily)
                     
-                    # Generate signal (only at market open)
-                    signal = check_volume_candlestick_buy_signal(
-                        symbol_full_daily, 
-                        volume_multiplier=1.3, 
-                        lookback_days=10, 
-                        min_bullish_patterns=2
-                    )
-
-                    signal2 = volume_sma_buy_signal(symbol_full_daily, volume_multiplier=1.5)
-                    
-                    if signal == 100 or signal2 == 100:
+                    if signal == 100:
                         print(f"BUY {symbol} at {current_price}")
                         account.add_trade(
                             buy_position=current_price,
                             num_of_stocks=shares,
                             stock_name=symbol,
                             date=timestamp,
-                            profit_target=1.1,
-                            trailing_start=1.05,
+                            profit_target=1.12,
+                            trailing_start=1.04,
                             initial_trail_percent=0.98,
-                            tight_trail_threshold=1.10,
+                            tight_trail_threshold=1.08,
                             tight_trail_percent=0.99,
-                            hard_stop_loss=0.90,
-                            volatility_threshold=1.0
+                            hard_stop_loss=0.9,
+                            volatility_threshold=1  # Simplified for demo
                         )
-            
-            # Still check positions every hour
-            for symbol, symbol_data in hour_data.groupby('Symbol'):
-                current_price = symbol_data['Close'].iloc[0]
-                account.check_trades(current_price, symbol, timestamp)
+        
+        # Unified position checking
+        for symbol, symbol_data in hour_data.groupby('Symbol'):
+            account.check_trades(symbol_data['Close'].iloc[0], symbol, timestamp)
         
     return account
 
+def calculate_position_size(account_balance, current_price, stop_loss_price=None, risk_per_trade=0.01, max_position_percent=0.25):
+    """
+    Calculates how many shares to buy based on either:
+    - Fixed 25% of account (your original method), or
+    - Risk-based sizing (recommended).
     
+    Parameters:
+        account_balance (float): Total available funds ($2000 in your case).
+        current_price (float): Entry price of the stock.
+        stop_loss_price (float): Optional. If provided, uses risk-based sizing.
+        risk_per_trade (float): % of account to risk per trade (default: 1%).
+        max_position_percent (float): Max % of account to allocate (default: 25%).
+        
+    Returns:
+        shares (int): Number of shares to buy.
+        position_value (float): Total $ amount of the trade.
+    """
+    # Option 1: Fixed 25% position sizing (your original method)
+    if stop_loss_price is None:
+        position_value = account_balance * max_position_percent
+        if position_value < current_price * 2:  # Ensure at least 2 shares
+            return 0, 0  # Skip trade if can't afford 2 shares
+        shares = int(position_value // current_price)
+        return shares, position_value
     
+    # Option 2: Risk-based sizing (recommended)
+    else:
+        risk_amount = account_balance * risk_per_trade  # e.g., 1% of $2000 = $20
+        risk_per_share = current_price - stop_loss_price  # e.g., $100 - $95 = $5 risk per share
+        if risk_per_share <= 0:
+            return 0, 0  # Invalid stop-loss
+        
+        shares = int(risk_amount // risk_per_share)  # $20 / $5 = 4 shares
+        position_value = shares * current_price  # 4 * $100 = $400
+        
+        # Ensure position doesn't exceed max % of account (25%)
+        max_position_value = account_balance * max_position_percent
+        if position_value > max_position_value:
+            shares = int(max_position_value // current_price)
+            position_value = shares * current_price
+        
+        # Check if at least 2 shares can be bought
+        if shares < 2 or position_value < current_price * 2:
+            return 0, 0  # Skip trade if too small
+        
+        return shares, position_value
+    
+def simulation_v2(data_dict, account, lookback_period=252):
+    """
+    Processes dictionary of stock DataFrames into sorted timestamps
+    and loops through each timestamp (without trading logic)
+    
+    Args:
+        data_dict: Dictionary of {symbol: DataFrame} with OHLCV data
+                  Example: {'ABX.TO': df, 'LCID': df}
+    
+    Returns:
+        combined: The merged DataFrame (for inspection)
+    """
+    # Combine all symbols into one DataFrame with timestamps
+    all_data = []
+    for symbol, df in data_dict.items():
+        df = df.copy()
+        df['Symbol'] = symbol
+        all_data.append(df)
+    
+    combined = pd.concat(all_data).sort_index()
+    
+    # Error handling for lookback period
+    available_days = (combined.index[-1] - combined.index[0]).days
+    if available_days < lookback_period:
+        raise ValueError(
+            f"Requested lookback ({lookback_period} days) exceeds available data "
+            f"({available_days} days). First date: {combined.index[0]}, Last date: {combined.index[-1]}"
+        )
+    
+    # Filter data to only include the lookback period
+    end_date = combined.index[-1]
+    start_date = end_date - pd.Timedelta(days=lookback_period)
+    filtered_data = combined.loc[start_date:end_date]
+    buy = 0
+    # Main processing loop
+    for timestamp in filtered_data.index.unique():
+        # Get all data for this exact timestamp
+        current_data = combined.loc[timestamp]
+        # Extract date without time
+        current_date = timestamp.date()
+        print(f"\nProcessing {timestamp}")
+        # Loop through each symbol
+        for symbol, row in current_data.iterrows():
+            # get this and all previous data for this symbol
+            symbol_data = data_dict[symbol].loc[:timestamp]
+            # Process data for this symbol
+            if (hammer_below_atr(symbol_data, account) == 100):
+                buy += 1
+    print(buy)
+    return 
 def main():
     db = Database(host="localhost", user="postgres", 
                 password="1234", dbname="tradingbot")
@@ -401,12 +482,15 @@ def main():
 
     intraday_data = fetch_data(db, all_symbols)
     daily_data = fetch_data_daily(db, all_symbols)
-
+    # simulation_v2(intraday_data, daily_data, account, lookback_period=252)
     # run_simulation(running_data, account, lookback_period=252, base_position_percentage=0.05) 
-    simulation(intraday_data, daily_data, account, lookback_period=100)
+    simulation_v1(intraday_data, daily_data, account, lookback_period=50)
     account.print_sold_trades()
-    account.print_balance()
     account.print_existing_trades()
+    account.print_balance()
+    account.print_metrics()
+    account.show_trading_timeline()
+
 
 if __name__ == "__main__":
     main()

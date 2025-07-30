@@ -54,39 +54,45 @@ try:
                 print(f"  Needs update from {start_date} to {end_date}")
                 try:
                     data = yf.download(symbol, start=start_date, end=end_date, interval='1h')
-                    
-                    # Add data to database (ONLY CHANGE: Added price_id lookup)
+
                     for index, row in data.iterrows():
                         # Get the corresponding daily price_id
                         cur.execute("""
                             SELECT price_id FROM daily_prices
                             WHERE stock_id = %s AND date = %s
                         """, (stock_id, index.date()))
-                        price_id = cur.fetchone()[0]
                         
+                        price_row = cur.fetchone()
+                        if not price_row:
+                            print(f"  Skipping {symbol} @ {index} — no daily price found for {index.date()}")
+                            continue  # Skip this row if no daily price entry exists
+
+                        price_id = price_row[0]
+
                         cur.execute("""
                             INSERT INTO intraday_60min_prices 
                             (price_id, stock_id, datetime, open, high, low, close, adjusted_close, volume)
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                             ON CONFLICT (stock_id, datetime) DO NOTHING
                         """, (
-                            price_id,  # Now properly included
-                            stock_id, 
-                            index.to_pydatetime(), 
-                            float(row['Open']), 
-                            float(row['High']), 
-                            float(row['Low']), 
-                            float(row['Close']), 
-                            0.0,  # Kept as original
+                            price_id,
+                            stock_id,
+                            index.to_pydatetime(),
+                            float(row['Open']),
+                            float(row['High']),
+                            float(row['Low']),
+                            float(row['Close']),
+                            0.0,
                             int(row['Volume'])
                         ))
-                    
+
                     conn.commit()
                     print(f"Successfully updated {len(data)} records for {symbol}")
 
                 except Exception as e:
                     print(f"Error updating {symbol}: {str(e)}")
                     conn.rollback()
+
             else:
                 print("  Already up to date")
         else:

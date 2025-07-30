@@ -73,6 +73,8 @@ def analyze_account_positions(account_positions):
     print("Trades")
     print(f"{'='*50}\n")
     for position in account_positions['positions']:
+        if position['openQuantity'] == 0:
+            continue
         update_trades.insert_trade(position)
         update_trades.update_trade(position)
         # Extract position data
@@ -157,10 +159,14 @@ def trade_recommendations():
             continue
         
         # Get strategy signal (100 = buy, 0 = hold/sell)
-        if strategies.volume_sma_buy_signal(data) or strategies.check_volume_candlestick_buy_signal(data) == 100:
+        volume_sma_signal = strategies.volume_sma_buy_signal(data)
+        candlestick_signal = strategies.check_volume_candlestick_buy_signal(data)
+        price_dip_signal = strategies.check_price_dip(data, atr_period=14, threshold_multiplier=0.7, recovery_factor=0.5)
+
+        if volume_sma_signal or candlestick_signal == 100 or price_dip_signal == 100:
             ma_50 = data['Close'].rolling(50).mean()[-1]
             ma_200 = data['Close'].rolling(200).mean()[-1]
-            
+
             recommendation = {
                 'symbol': symbol,
                 'name': name,
@@ -169,9 +175,18 @@ def trade_recommendations():
                 'ma_200': ma_200
             }
             buy_recommendations.append(recommendation)
-            
+
             print(f"BUY {stock['symbol']} ({stock['company_name']})")
             print(f"Price: ${data['Close'][-1]:.2f} | 50MA: ${ma_50:.2f} | 200MA: ${ma_200:.2f}")
+            
+            print("Triggered Strategies:")
+            if volume_sma_signal:
+                print("- Volume SMA Crossover")
+            if candlestick_signal == 100:
+                print("- Volume Candlestick Pattern")
+            if price_dip_signal == 100:
+                print("- Price Dip")
+            
             print("---")
     
     print(f"\n{'='*50}")
@@ -187,6 +202,7 @@ def main():
         accounts = qt.make_request("/v1/accounts")
         print("Accounts:", accounts)
     except Exception as e:
+        print("2")
         print(f"API Error: {e}")
 
     try:
@@ -195,7 +211,7 @@ def main():
     except Exception as e:
         print(f"API Error: {e}")
 
-    # analyze_account_positions(positions)
+    analyze_account_positions(positions)
     
     trade_recommendations()
 

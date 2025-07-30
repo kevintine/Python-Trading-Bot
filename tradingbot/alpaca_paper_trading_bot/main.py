@@ -38,7 +38,7 @@ DB_CONFIG = {
 
 
 
-symbol = "AFRM"
+symbol = "LCID"
 
 async def handle_trade(trade, custom_arg1):
 
@@ -101,7 +101,7 @@ def main():
 
 
     # Initialize stream
-    stream = StockDataStream(API_KEY, API_SECRET)
+    stream = StockDataStream('PKGJHW34RDC8CG26S1OB', 'NDu8J0yVPfo7enmZaTFBPSUpbCVdw1ccWYWExNxI')
     stream.subscribe_trades(
         partial(handle_trade, custom_arg1=active_trades), 
         symbol
@@ -109,7 +109,7 @@ def main():
     
 
     try:
-        print("Starting NVAX trade stream...")
+        print(f"Starting {symbol} trade stream...")
         asyncio.run(stream.run())
     except KeyboardInterrupt:
         print("\nStream stopped by user")

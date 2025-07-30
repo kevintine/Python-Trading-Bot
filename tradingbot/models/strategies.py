@@ -487,5 +487,216 @@ def check_volume_spike(df):
     else:
         return 0
    
+def check_price_spike(df, atr_period=14, threshold_multiplier=1.5):
+    """
+    Identifies if the current price spiked significantly below the recent average range.
+    Returns 100 if the current low is more than `threshold_multiplier` * ATR below the previous close.
+    Otherwise, returns 0.
 
+    Parameters:
+        df (pd.DataFrame): Must contain columns 'High', 'Low', 'Close'.
+        atr_period (int): Period for ATR calculation.
+        threshold_multiplier (float): Sensitivity for spike detection.
 
+    Returns:
+        int: 100 if spike detected, else 0.
+    """
+
+    if len(df) < atr_period + 2:
+        return 0  # Not enough data
+
+    # Calculate True Range and ATR
+    high = df['High']
+    low = df['Low']
+    close = df['Close']
+
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+    atr = tr.rolling(window=atr_period).mean()
+
+    # Compare today's low to yesterday's close minus threshold * ATR
+    today_low = low.iloc[-1]
+    prev_close = close.iloc[-2]
+    current_atr = atr.iloc[-2]  # Use ATR from yesterday for stability
+
+    if pd.isna(current_atr):
+        return 0
+
+    # Spike condition: price dropped more than X * ATR below previous close
+    if today_low < (prev_close - threshold_multiplier * current_atr):
+        return 100
+    else:
+        return 0
+
+def check_price_dip(df, atr_period=14, threshold_multiplier=0.5, recovery_factor=0.5):
+    """
+    Detects a price dip (not a crash) by comparing today's low to yesterday's close
+    and ensuring the close is not at the low (indicating some recovery).
+
+    Parameters:
+        df (pd.DataFrame): Contains 'High', 'Low', 'Close'.
+        atr_period (int): Period for ATR calculation.
+        threshold_multiplier (float): Dip threshold (e.g., 0.5 = 0.5 * ATR).
+        recovery_factor (float): Minimum portion of the range today's close should be above the low.
+                                 E.g., 0.5 means price closed above 50% of the day's range.
+
+    Returns:
+        int: 1 if a dip is detected, else 0.
+    """
+
+    if len(df) < atr_period + 2:
+        return 0
+
+    high = df['High']
+    low = df['Low']
+    close = df['Close']
+
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=atr_period).mean()
+
+    today_low = low.iloc[-1]
+    today_close = close.iloc[-1]
+    prev_close = close.iloc[-2]
+    current_atr = atr.iloc[-2]
+
+    if pd.isna(current_atr):
+        return 0
+
+    # Define dip threshold: mild drop below yesterday's close
+    dip_threshold = prev_close - threshold_multiplier * current_atr
+
+    # Condition 1: today's low is below the threshold (mild dip)
+    dipped = today_low < dip_threshold
+
+    # Condition 2: today's close is not at the low (indicating a bounce/recovery)
+    recovery_ok = (today_close - today_low) >= recovery_factor * (high.iloc[-1] - low.iloc[-1])
+
+    if dipped and recovery_ok:
+        return 100
+    return 0
+
+def check_sma_trend(df, sma_period=20, lookback_days=3):
+
+    """
+    Checks if the Simple Moving Average (SMA) is in an upward trend.
+    
+    Parameters:
+        df (pd.DataFrame): Must contain 'Close' prices (will not be modified)
+        sma_period (int): Number of days for SMA calculation (default: 20)
+        lookback_days (int): Number of recent days to check for trend (default: 3)
+    
+    Returns:
+        tuple: (result: int, sma_values: pd.Series)
+            - result: 100 if SMA is trending upward, 0 otherwise
+            - sma_values: The calculated SMA series (for debugging/display)
+    """
+    # Create a clean copy to avoid modifying original DataFrame
+    df = df.copy()
+    
+    # Check if we have enough data
+    if len(df) < sma_period + lookback_days:
+        return (0, pd.Series(dtype='float64'))
+    
+    # Calculate SMA safely
+    sma_values = df['Close'].rolling(window=sma_period).mean()
+    
+    # Check if recent SMA values are consistently increasing
+    recent_sma = sma_values.tail(lookback_days)
+    is_upward = all(recent_sma.iloc[i] > recent_sma.iloc[i-1] for i in range(1, len(recent_sma)))
+    
+    return 100 if is_upward else 0
+
+def check_dip_below_period_low(
+    df, 
+    period=30,          # Lookback period (e.g., 30 for 1 month)
+    volume_lookback=20, # Volume average period 
+    volume_multiplier=1.2, # Volume spike threshold (e.g., 1.2 = 20% above avg)
+    require_close_above_low=False # Optional: Demand price recovers
+):
+    """
+    Detects if current candle:
+    1. Made a new LOW lower than the lowest of past `period` days.
+    2. Volume is higher than average (configurable multiplier).
+    3. (Optional) Close is above the low (recovery confirmation).
+
+    Parameters:
+        df (pd.DataFrame): Must contain 'Low', 'Close', 'Volume'.
+        period (int): Lookback for lowest low (default: 30 for 1 month).
+        volume_lookback (int): Avg volume calculation window.
+        volume_multiplier (float): Volume spike threshold.
+        require_close_above_low (bool): If True, close must be > low.
+
+    Returns:
+        int: 100 if conditions met, else 0.
+    """
+    if len(df) < max(period, volume_lookback) + 1:
+        return 0  # Not enough data
+
+    current_low = df['Low'].iloc[-1]
+    current_close = df['Close'].iloc[-1]
+    current_volume = df['Volume'].iloc[-1]
+
+    # 1. Find lowest low of past `period` days (excluding current candle)
+    past_lows = df['Low'].iloc[-period-1:-1]
+    lowest_past_low = past_lows.min()
+
+    # 2. Calculate average volume (excluding current candle)
+    avg_volume = df['Volume'].iloc[-volume_lookback-1:-1].mean()
+
+    # Conditions
+    condition_new_low = current_low < lowest_past_low
+    condition_volume = current_volume > (avg_volume * volume_multiplier)
+    condition_recovery = (not require_close_above_low) or (current_close > current_low)
+
+    if condition_new_low and condition_volume and condition_recovery:
+        return 100  # Dip confirmed
+    return 0
+
+def hammer_below_atr(yf_df, atr_period=14, atr_multiplier=1.0):
+    """
+    Processes yfinance DataFrame to detect hammer candles below ATR threshold
+    
+    Args:
+        yf_df: yfinance-style DataFrame with OHLCV columns
+        atr_period: Lookback for ATR calculation (default 14)
+        atr_multiplier: Multiplier for ATR threshold (default 1.0)
+    
+    Returns:
+        int: 100 when conditions met, 0 otherwise
+    """
+    if len(yf_df) < atr_period:
+        return 0
+    
+    df = yf_df.copy()
+    
+    # Calculate True Range
+    df['TR'] = np.maximum(
+        df['High'] - df['Low'],
+        np.maximum(
+            abs(df['High'] - df['Close'].shift(1)),
+            abs(df['Low'] - df['Close'].shift(1))
+        )
+    )
+    
+    # Calculate ATR
+    df['ATR'] = df['TR'].rolling(atr_period).mean()
+    
+    # Get last candle
+    last = df.iloc[-1]
+    
+    # Hammer pattern detection
+    body_size = abs(last['Close'] - last['Open'])
+    candle_range = last['High'] - last['Low']
+    
+    is_hammer = (ta.CDLHAMMER(df["Open"], df["High"], df["Low"], df["Close"]).iloc[-1])
+    
+    # Price below ATR threshold
+    below_atr = last['Close'] < (last['Open'] - (last['ATR'] * atr_multiplier))
+    
+    return 100 if (is_hammer) else 0

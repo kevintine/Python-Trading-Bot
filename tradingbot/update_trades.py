@@ -18,31 +18,32 @@ def insert_trade(trade_dict: dict) -> dict:
     """
     Inserts a new trade using generate_trade_id() for unique IDs and 
     currentMarketValue as current_price.
-    
+
     Args:
         trade_dict: {
-            'symbol': str,               # Required
-            'symbolId': int,             # Required for trade ID
-            'openQuantity': int,         # -> num_of_stocks
-            'averageEntryPrice': float,  # -> buy_position
-            'currentMarketValue': float, # -> current_price
-            'currentPrice': float,       # Optional fallback
-            'totalCost': float           # Optional for notes
+            'symbol': str,
+            'symbolId': int,
+            'openQuantity': int,
+            'averageEntryPrice': float,
+            'currentMarketValue': float,
+            'currentPrice': float,
+            'totalCost': float
         }
-    
+
     Returns:
         Complete trade record with all columns
-    
+
     Raises:
         ValueError: For invalid data or duplicate trades
     """
-    # Validate required fields
     if trade_dict['openQuantity'] <= 0:
         raise ValueError("Quantity must be positive")
-    
-    db = classes.Database(host="localhost", user="postgres",
-                         password="1234", dbname="tradingbot")
-    
+
+    db = classes.Database(
+        host="localhost", user="postgres",
+        password="1234", dbname="tradingbot"
+    )
+
     # 1. Get stock_id
     stock_result = db.query(
         "SELECT stock_id FROM stocks WHERE symbol = %s",
@@ -52,11 +53,11 @@ def insert_trade(trade_dict: dict) -> dict:
     if not stock_result:
         raise ValueError(f"Stock {trade_dict['symbol']} not found")
     stock_id = stock_result[0]['stock_id']
-    
-    # 2. Generate unique trade ID
+
+    # 2. Generate trade_id
     trade_id = generate_trade_id(trade_dict)
-    
-    # 3. Check for existing trade ID (not just same stock/date)
+
+    # 3. Check for existing trade
     existing = db.query(
         "SELECT 1 FROM trades WHERE trade_id = %s",
         (trade_id,),
@@ -64,17 +65,16 @@ def insert_trade(trade_dict: dict) -> dict:
     )
     if existing:
         return None
-        raise ValueError(f"Trade ID {trade_id} already exists") 
-    
-    # 4. Calculate current_price per share
+
+    # 4. Calculate current price per share
     current_price = (
-        trade_dict.get('currentMarketValue') or  # Primary source
-        trade_dict.get('currentPrice')           # Fallback
+        trade_dict.get('currentMarketValue') or
+        trade_dict.get('currentPrice')
     )
     if current_price and trade_dict['openQuantity'] > 0:
         current_price = round(current_price / trade_dict['openQuantity'], 4)
-    
-    # 5. Insert trade with custom ID
+
+    # 5. Insert new trade (no 'notes' column)
     result = db.query(
         """
         INSERT INTO trades (
@@ -83,10 +83,9 @@ def insert_trade(trade_dict: dict) -> dict:
             buy_position,
             num_of_stocks,
             buy_date,
-            current_price,
-            notes
+            current_price
         ) VALUES (
-            %s, %s, %s, %s, CURRENT_DATE, %s, %s
+            %s, %s, %s, %s, CURRENT_DATE, %s
         )
         RETURNING *
         """,
@@ -95,16 +94,34 @@ def insert_trade(trade_dict: dict) -> dict:
             stock_id,
             trade_dict['averageEntryPrice'],
             trade_dict['openQuantity'],
-            current_price,
-            f"Market value: {trade_dict.get('currentMarketValue')} | "
-            f"Entry cost: {trade_dict.get('totalCost')}"
+            current_price
         ),
         fetch=True
     )
-    
+
+
     if not result:
         raise RuntimeError("Failed to insert trade")
     return result[0]
 
-def update_trade(trade_id: int, trade_dict: dict) -> dict:
-    pass
+
+def update_trade(trade_dict: dict) -> dict:
+    trade_id = generate_trade_id(trade_dict)
+    db = classes.Database(
+        host="localhost", user="postgres",
+        password="1234", dbname="tradingbot"
+    )
+    db.query(
+        """
+        UPDATE trades SET
+            current_price = %s
+        WHERE trade_id = %s
+        """,
+        (
+            trade_dict['currentPrice'],
+            trade_id
+        ),
+        fetch=False
+    )
+    return 0
+

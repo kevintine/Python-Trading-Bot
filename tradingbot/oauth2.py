@@ -19,7 +19,7 @@ class QuestradeAuth:
                 self.api_server = tokens["api_server"]
                 self.token_expiry = datetime.fromisoformat(tokens["token_expiry"])
         else:
-            self.refresh_token = "DhzqWL0vzgf2AaQYJRv3Jr8TgkQUkf7V0"
+            self.refresh_token = "kF-0jttHOdpo_MFj6oYJCXw-dv4HYbMT0"
             self.refresh_access_token()
     
     def save_tokens(self):
@@ -78,10 +78,15 @@ class QuestradeAuth:
 # Usage
 if __name__ == "__main__":
     qt = QuestradeAuth()  # Automatically loads/saves tokens
-    
     # Example API call
     try:
         accounts = qt.make_request("/v1/accounts")
         print("Accounts:", accounts)
     except Exception as e:
         print(f"API Error: {e}")
+
+
+def main():
+    qt = QuestradeAuth()
+    accounts = qt.make_request("/v1/accounts")
+    print(accounts)

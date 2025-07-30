@@ -1,9 +1,8 @@
-from flask import Flask, render_template
-from flask_socketio import SocketIO
-import alpaca_trade_api as tradeapi
-import asyncio
+from flask import Flask, render_template, request, jsonify, send_from_directory
+import json
+from alpaca.data.live import StockDataStream 
+import yfinance as yf
 import threading
-import queue
 from dotenv import load_dotenv
 from pathlib import Path
 import os
@@ -13,93 +12,123 @@ load_dotenv(dotenv_path=env_path)
 API_KEY = os.getenv('YOUR_API_KEY_ID')
 API_SECRET = os.getenv('YOUR_SECRET_KEY')
 
-app = Flask(__name__)
-socketio = SocketIO(app, async_mode='threading')
+app = Flask(__name__, template_folder='templates')
 
-# Alpaca Configuration
-BASE_URL = 'https://paper-api.alpaca.markets'
+stream = None  # Global stream handle
 
-# Stocks to watch
-WATCHLIST = ['AAPL', 'MSFT', 'TSLA', 'AMZN', 'GOOGL']
+DEFAULT_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA']
+subscribed_symbols = set(DEFAULT_STOCKS)
+# Store live prices
+live_prices = {symbol: None for symbol in DEFAULT_STOCKS}
 
-# Store latest prices
-latest_prices = {symbol: {'price': 0, 'change': 0} for symbol in WATCHLIST}
+def start_stream():
+    global stream 
+    # Correct initialization (no keyword arguments)
+    stream = StockDataStream('PKGJHW34RDC8CG26S1OB', 'NDu8J0yVPfo7enmZaTFBPSUpbCVdw1ccWYWExNxI')
+    
+    async def on_trade(trade):
+        symbol = trade.symbol
+        price = trade.price
+        print(f"TRADE UPDATE: {symbol} @ {price}")
+        live_prices[symbol] = price
+    
+    # Subscribe to all default stocks
+    for symbol in DEFAULT_STOCKS:
+        stream.subscribe_trades(on_trade, symbol)
+    
+    print("Starting WebSocket connection...")
+    try:
+        stream.run()
+    except Exception as e:
+        print(f"WebSocket error: {e}")
 
-# Queue for thread-safe communication
-update_queue = queue.Queue()
+# Start WebSocket in background
+threading.Thread(target=start_stream, daemon=True).start()
 
-def alpaca_stream_thread():
-    async def run_stream():
-        stream = tradeapi.stream2.Stream(API_KEY, API_SECRET, base_url=BASE_URL, data_feed='iex')
-        
-        async def on_bar(bar):
-            try:
-                # Get previous close
-                prev_close = api.get_barset(bar.symbol, 'day', limit=2)[bar.symbol][0].c
-                change_pct = ((bar.close - prev_close) / prev_close) * 100
-                
-                update_queue.put({
-                    'symbol': bar.symbol,
-                    'price': bar.close,
-                    'change': change_pct
-                })
-            except Exception as e:
-                print(f"Error processing bar: {e}")
+@app.route('/live_prices')
+def get_live_prices():
+    return jsonify({
+        'prices': live_prices,
+        'status': 'connected' if any(live_prices.values()) else 'waiting_for_data'
+    })
 
-        # Subscribe to bars
-        stream.subscribe_bars(on_bar, *WATCHLIST)
-        
-        # Run stream
-        await stream._run_forever()
+@app.route('/search_stock', methods=['POST'])
+def search_stock():
+    global stream, DEFAULT_STOCKS, live_prices, subscribed_symbols
 
-    # Create new event loop for the thread
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(run_stream())
+    symbol = request.form.get('symbol', '').upper()
 
-def process_updates():
-    while True:
-        try:
-            update = update_queue.get_nowait()
-            symbol = update['symbol']
-            latest_prices[symbol] = {
-                'price': update['price'],
-                'change': update['change']
-            }
-            
-            socketio.emit('stock_update', {
-                'symbol': symbol,
-                'price': update['price'],
-                'change': f"{update['change']:.2f}%",
-                'color': 'green' if update['change'] >= 0 else 'red'
-            })
-        except queue.Empty:
-            socketio.sleep(0.1)
+    if not symbol:
+        return jsonify({'error': 'Symbol not provided'}), 400
+
+    try:
+        stock = yf.Ticker(symbol)
+        info = stock.info
+
+        if not info or ('regularMarketPrice' not in info and 'currentPrice' not in info):
+            return jsonify({'error': 'Stock not found'}), 404
+
+        current_price = info.get('currentPrice', info.get('regularMarketPrice'))
+        hist = stock.history(period="1d", interval="1m")
+        day_high = hist['High'].max()
+        day_low = hist['Low'].min()
+        stock_data = {
+            'symbol': symbol,
+            'name': info.get('shortName', info.get('longName', 'N/A')),
+            'current_price': info.get("previousClose"),
+            'currency': info.get('currency', 'N/A'),
+            'previous_close': info.get('previousClose', 'N/A'),
+            'day_high': day_high,
+            'day_low': day_low
+        }
+
+        # Add to default list if not already there
+        if symbol not in DEFAULT_STOCKS:
+            DEFAULT_STOCKS.append(symbol)
+
+        # Add to live_prices if not tracked
+        if symbol not in live_prices:
+            live_prices[symbol] = current_price
+
+        # Subscribe to live data if not already subscribed
+        if symbol not in subscribed_symbols:
+            subscribed_symbols.add(symbol)
+
+            async def on_trade(trade):
+                if trade.symbol == symbol:
+                    live_prices[trade.symbol] = trade.price
+                    # print(f"TRADE UPDATE (dynamic): {trade.symbol} @ {trade.price}")
+
+            if stream:
+                stream.subscribe_trades(on_trade, symbol)
+
+        return jsonify(stock_data)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()  # Shows full error in console
+        return jsonify({
+            'error': f'Error searching for symbol: {symbol}',
+            'details': str(e)
+        }), 500
 
 @app.route('/')
-def index():
-    return render_template('index.html', watchlist=WATCHLIST)
+def home():
+    # Just send the file - we'll handle defaults in JavaScript
+    return send_from_directory('templates', 'index.html')
 
-@socketio.on('connect')
-def handle_connect():
-    # Send initial data when client connects
-    for symbol, data in latest_prices.items():
-        socketio.emit('stock_update', {
-            'symbol': symbol,
-            'price': data['price'],
-            'change': f"{data['change']:.2f}%" if data['price'] != 0 else '0.00%',
-            'color': 'green' if data['change'] >= 0 else 'red'
-        })
+@app.route('/backtest')
+def backtest():
+    # Just send the file - we'll handle defaults in JavaScript
+    return send_from_directory('templates', 'backtest.html')
+
+@app.route('/get_default_stocks')
+def get_default_stocks():
+    return json.dumps(DEFAULT_STOCKS)
+
+@app.route('/<path:filename>')
+def serve_static(filename):
+    return send_from_directory('templates', filename)
 
 if __name__ == '__main__':
-    # Initialize Alpaca REST client
-    api = tradeapi.REST(API_KEY, API_SECRET, BASE_URL)
-    
-    # Start Alpaca stream thread
-    threading.Thread(target=alpaca_stream_thread, daemon=True).start()
-    
-    # Start update processing thread
-    threading.Thread(target=process_updates, daemon=True).start()
-    
-    # Run Flask app
-    socketio.run(app, debug=True)
+    app.run(debug=True)

@@ -1,0 +1,8 @@
+UPDATE trades
+SET 
+    sell_position = 2.32,
+    sell_date = '2025-07-19',
+    is_active = 'f',
+    updated_at = NOW()
+WHERE trade_id = '3723139215021782';
+
